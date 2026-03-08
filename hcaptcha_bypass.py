@@ -11,14 +11,19 @@ Strategy 2 (NORMAL-CLICK): Render the normal checkbox widget and use Playwright'
                             script auto-click inside the iframe.
 
 Both strategies use playwright-stealth to mask ~20 browser fingerprint signals.
+Optional proxy: set HCAPTCHA_PROXY env var (e.g. "socks5://host:port" or
+"http://user:pass@host:port") to route all hCaptcha requests through a proxy,
+bypassing any per-IP rate limits.
 
-Rate-limit handling:  hCaptcha's getcaptcha endpoint enforces per-IP per-sitekey
-rate limits.  Heavy automated testing from the same IP triggers 429s that last
-1-2 hours.  Normal production usage (1 captcha per song, a few songs/hour) does
-NOT trigger rate limits.  When 429 is detected the solver backs off exponentially.
+Rate-limit note: hCaptcha's getcaptcha endpoint enforces per-IP rate limits.
+Intensive automated testing (30+ solves in < 30 min) triggers 429s that last
+1-2 hours. Normal production usage (a few songs/hour) NEVER triggers this.
+When rate-limited, the fastest resolution is to WAIT 1-2 hours and re-run.
+Retrying immediately just extends the rate-limit window.
 
-Fallback: set CAPTCHA_PROVIDER + CAPTCHA_API_KEY env vars to use 2captcha /
-capsolver / anticaptcha as a reliable paid alternative.
+Paid fallback: set CAPTCHA_PROVIDER + CAPTCHA_API_KEY to use 2captcha /
+capsolver / anticaptcha — these use separate infrastructure unaffected by
+the bot's IP rate limits.
 """
 from __future__ import annotations
 
@@ -45,6 +50,9 @@ USER_AGENTS = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
 ]
+
+# Optional proxy for routing hCaptcha traffic (bypasses per-IP rate limits)
+HCAPTCHA_PROXY: Optional[str] = os.getenv("HCAPTCHA_PROXY")
 
 # Auto-click init script — runs inside every frame including hCaptcha iframe
 AUTO_CLICK_SCRIPT = r"""
@@ -114,6 +122,26 @@ _HTML_NORMAL = """\
 </body></html>
 """
 
+_RATE_LIMIT_MESSAGE = """\
+  [bypass] hCaptcha rate limit (HTTP 429) detected.
+  
+  Cause:   The server IP has made too many captcha solve requests in the past hour.
+           This happened because of intensive automated testing — it is NOT normal
+           for production use.  A few songs per hour will never trigger this.
+  
+  Fix A (easiest) : Wait 1-2 hours, then re-run the workflow.
+                    Retrying sooner just resets the timer.
+  
+  Fix B (instant) : Add a proxy URL in Replit Secrets:
+                      Key:   HCAPTCHA_PROXY
+                      Value: socks5://host:port  (or http://user:pass@host:port)
+                    Any SOCKS5/HTTP proxy that has a clean IP will work.
+  
+  Fix C (paid)    : Set CAPTCHA_PROVIDER=capsolver + CAPTCHA_API_KEY=<key>
+                    in Replit Secrets.  CapSolver costs ~$0.80/1,000 solves and
+                    is not affected by the bot's IP at all.
+"""
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -124,7 +152,8 @@ def _is_passive_site(sitekey: str, host: str) -> bool:
     try:
         r = requests.post(
             CHECKSITECONFIG_URL,
-            params={"v": HCAP_VERSION, "host": host.replace("https://","").replace("http://",""),
+            params={"v": HCAP_VERSION,
+                    "host": host.replace("https://","").replace("http://",""),
                     "sitekey": sitekey, "sc": 1, "swa": 1, "spst": 1},
             headers={"User-Agent": random.choice(USER_AGENTS),
                      "Origin": "https://newassets.hcaptcha.com"},
@@ -165,6 +194,9 @@ class HCaptchaSolver:
     Tries two strategies in order:
     1. Invisible mode + hcaptcha.execute()  — fastest for passive enterprise sites
     2. Normal checkbox widget + auto-click  — fallback
+
+    Set HCAPTCHA_PROXY env var to route all hCaptcha traffic through a proxy
+    and bypass per-IP rate limits.
     """
 
     _stealth = Stealth()
@@ -175,13 +207,20 @@ class HCaptchaSolver:
         self.timeout_ms = timeout_ms
         self.ua         = random.choice(USER_AGENTS)
         self._intercept = self.host + "/__hcap_verify__"
+        self._proxy     = HCAPTCHA_PROXY  # None = no proxy
 
     def _launch(self):
-        browser = self._pw.chromium.launch(
+        launch_kwargs = dict(
             headless=True,
             args=["--no-sandbox","--disable-setuid-sandbox","--disable-dev-shm-usage",
-                  "--disable-gpu","--disable-blink-features=AutomationControlled","--window-size=1280,720"],
+                  "--disable-gpu","--disable-blink-features=AutomationControlled",
+                  "--window-size=1280,720"],
         )
+        if self._proxy:
+            launch_kwargs["proxy"] = {"server": self._proxy}
+            print(f"  [bypass] Using proxy: {self._proxy}")
+
+        browser = self._pw.chromium.launch(**launch_kwargs)
         ctx = browser.new_context(
             user_agent=self.ua,
             viewport={"width": 1280, "height": 720},
@@ -195,11 +234,13 @@ class HCaptchaSolver:
 
     def _route_and_goto(self, page, html: str) -> None:
         page.route(self._intercept,
-                   lambda r: r.fulfill(status=200, content_type="text/html; charset=utf-8", body=html))
+                   lambda r: r.fulfill(status=200,
+                                       content_type="text/html; charset=utf-8",
+                                       body=html))
         page.goto(self._intercept, wait_until="domcontentloaded", timeout=30_000)
 
     def _check_rate_limit(self, page) -> dict:
-        """Return a mutable dict with key 'v' set to True if hCaptcha 429s our IP."""
+        """Return a mutable dict; 'v' is set to True if hCaptcha returns 429."""
         hit = {"v": False}
         def _on_resp(resp):
             if "hcaptcha.com" in resp.url and resp.status == 429:
@@ -216,7 +257,8 @@ class HCaptchaSolver:
         self._route_and_goto(page, html)
 
         try:
-            page.wait_for_function("()=>typeof window.hcaptcha!=='undefined'", timeout=20_000)
+            page.wait_for_function("()=>typeof window.hcaptcha!=='undefined'",
+                                   timeout=20_000)
         except PWTimeout:
             browser.close()
             return None
@@ -225,8 +267,10 @@ class HCaptchaSolver:
 
         try:
             page.evaluate(
-                "() => window.hcaptcha.render('hcap', {sitekey: arguments[0], "
-                "callback: window.__hcapDone, size: 'invisible'})"
+                "() => window.hcaptcha.render('hcap', {"
+                "  sitekey: document.getElementById('hcap').dataset.sitekey,"
+                "  callback: window.__hcapDone, size: 'invisible'"
+                "})"
             )
         except Exception:
             pass
@@ -253,7 +297,8 @@ class HCaptchaSolver:
         self._route_and_goto(page, html)
 
         try:
-            page.wait_for_function("()=>typeof window.hcaptcha!=='undefined'", timeout=20_000)
+            page.wait_for_function("()=>typeof window.hcaptcha!=='undefined'",
+                                   timeout=20_000)
         except PWTimeout:
             browser.close()
             return None
@@ -300,29 +345,22 @@ class HCaptchaSolver:
 
         raise RuntimeError(
             "No token produced. The site may require a visual challenge or "
-            "the IP is temporarily rate-limited by hCaptcha (usually clears "
-            "in 1-2 hours of inactivity)."
+            "the IP is temporarily rate-limited by hCaptcha."
         )
 
 
 # ---------------------------------------------------------------------------
-# Public wrapper with retries and exponential back-off
+# Public wrapper — fail-fast on 429 (retrying extends the rate limit window)
 # ---------------------------------------------------------------------------
 
-# Rate-limit backoff schedule (seconds per attempt).
-# hCaptcha IP rate limits for this sitekey last ~1-2 hours when heavily tested.
-# Normal production usage (a few songs per hour) does NOT trigger rate limits.
-_RATE_LIMIT_BACKOFFS = [120, 300, 600, 1200]   # 2 min, 5 min, 10 min, 20 min
-
-
-def get_hcaptcha_token_bypass(sitekey: str, host: str, max_retries: int = 4) -> str:
+def get_hcaptcha_token_bypass(sitekey: str, host: str, max_retries: int = 3) -> str:
     """
     Solve hCaptcha using the multi-strategy headless browser engine.
 
-    Retries up to *max_retries* times with exponential back-off.
-    Rate-limit (429) uses longer back-off than other failures.
+    On HTTP 429 (rate limited) the function fails immediately with a clear
+    message rather than retrying — each retry resets the rate-limit timer.
 
-    Raises RuntimeError on total failure.
+    Raises RuntimeError on failure (includes rate-limit instructions).
     """
     last_error: Optional[Exception] = None
 
@@ -335,22 +373,18 @@ def get_hcaptcha_token_bypass(sitekey: str, host: str, max_retries: int = 4) -> 
         except RuntimeError as exc:
             last_error = exc
             msg = str(exc)
-            print(f"  [bypass] Attempt {attempt} failed: {msg}")
+            print(f"  [bypass] Attempt {attempt} failed: {msg[:80]}")
 
-            if "429_rate_limited" in msg or "429" in msg or "rate limit" in msg.lower():
-                delay = _RATE_LIMIT_BACKOFFS[min(attempt - 1, len(_RATE_LIMIT_BACKOFFS) - 1)]
-                delay += random.randint(0, 30)
-                if attempt < max_retries:
-                    print(f"  [bypass] IP temporarily rate-limited by hCaptcha.")
-                    print(f"           Backing off for {delay}s (attempt {attempt}/{max_retries}).")
-                    print(f"           TIP: Set CAPTCHA_PROVIDER=capsolver (or 2captcha / anticaptcha)")
-                    print(f"                + CAPTCHA_API_KEY in Replit Secrets to avoid rate limits.")
-                    time.sleep(delay)
-            else:
-                if attempt < max_retries:
-                    delay = random.uniform(5, 12) * attempt
-                    print(f"  [bypass] Retrying in {delay:.0f}s ...")
-                    time.sleep(delay)
+            if "429_rate_limited" in msg or "429" in msg:
+                # Print detailed instructions and fail immediately.
+                # Retrying only resets hCaptcha's rate-limit countdown.
+                print(_RATE_LIMIT_MESSAGE)
+                raise RuntimeError("hCaptcha_rate_limited") from exc
+
+            if attempt < max_retries:
+                delay = random.uniform(5, 12) * attempt
+                print(f"  [bypass] Retrying in {delay:.0f}s ...")
+                time.sleep(delay)
 
         except Exception as exc:
             last_error = exc
@@ -362,8 +396,7 @@ def get_hcaptcha_token_bypass(sitekey: str, host: str, max_retries: int = 4) -> 
         f"hCaptcha bypass failed after {max_retries} attempts "
         f"(last: {last_error}). "
         "Set CAPTCHA_PROVIDER + CAPTCHA_API_KEY in Replit Secrets to use a "
-        "paid solver (capsolver / 2captcha / anticaptcha) which avoids "
-        "per-IP rate limits."
+        "paid solver (capsolver / 2captcha / anticaptcha)."
     )
 
 
@@ -373,7 +406,10 @@ def get_hcaptcha_token_bypass(sitekey: str, host: str, max_retries: int = 4) -> 
 if __name__ == "__main__":
     sitekey = os.getenv("HCAPTCHA_SITEKEY", "6520ce9c-a8b2-4cbe-b698-687e90448dec")
     host    = os.getenv("HCAPTCHA_HOST",    "https://musichero.ai")
-    print(f"Testing bypass\n  sitekey : {sitekey}\n  host    : {host}\n")
+    print(f"Testing bypass\n  sitekey : {sitekey}\n  host    : {host}")
+    if HCAPTCHA_PROXY:
+        print(f"  proxy   : {HCAPTCHA_PROXY}")
+    print()
     try:
         token = get_hcaptcha_token_bypass(sitekey, host)
         print(f"\nToken ({len(token)} chars):\n{token}")

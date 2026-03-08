@@ -273,8 +273,15 @@ def create_song(session: requests.Session, mode: str, **kwargs) -> bool:
         # Solve a fresh captcha token for every POST request
         try:
             token = get_hcaptcha_token()
-        except (RuntimeError, EnvironmentError) as exc:
+        except RuntimeError as exc:
+            msg = str(exc)
+            if "hCaptcha_rate_limited" in msg or "rate_limited" in msg:
+                # Raise so the caller (run_generation_loop) can stop the whole run
+                raise
             print(f"[create] Captcha solve error: {exc}")
+            return False
+        except EnvironmentError as exc:
+            print(f"[create] Captcha config error: {exc}")
             return False
 
         headers = build_headers(unique_id, token)
@@ -418,9 +425,16 @@ def run_generation_loop(songs: list[dict]) -> None:
         print(f"  Prompt: {prompt[:80]}")
         print(f"{'─'*60}")
 
-        # Strip keys that are not kwargs for create_song to avoid duplicate argument errors
         song_kwargs = {k: v for k, v in song.items() if k not in ("mode",)}
-        success = create_song(session, mode, **song_kwargs)
+        try:
+            success = create_song(session, mode, **song_kwargs)
+        except RuntimeError as exc:
+            if "rate_limited" in str(exc):
+                print(f"\n[loop] Stopping run — hCaptcha IP rate limit hit.")
+                print(f"       Re-run the workflow in 1-2 hours, or add a")
+                print(f"       HCAPTCHA_PROXY or paid CAPTCHA_PROVIDER secret.")
+                break
+            raise
         if not success:
             print(f"[loop] Skipping song {idx} — creation request failed.")
             results.append({"index": idx, "status": "failed", "url": None})
