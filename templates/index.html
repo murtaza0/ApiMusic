@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>musichero.ai Generator</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0d14;
+      --surface:   #16162a;
+      --border:    #2a2a45;
+      --accent:    #7c3aed;
+      --accent2:   #a855f7;
+      --green:     #22c55e;
+      --red:       #ef4444;
+      --yellow:    #f59e0b;
+      --text:      #e2e8f0;
+      --muted:     #8b8ba8;
+      --card-r:    12px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 15px;
+      min-height: 100vh;
+    }
+
+    /* ---------- Header ---------- */
+    header {
+      background: linear-gradient(135deg, #1a0a3d 0%, #0d0d14 60%);
+      border-bottom: 1px solid var(--border);
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    header .logo {
+      width: 38px; height: 38px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+    header h1 { font-size: 20px; font-weight: 700; letter-spacing: .3px; }
+    header p  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    /* ---------- Layout ---------- */
+    .layout {
+      display: grid;
+      grid-template-columns: 480px 1fr;
+      gap: 24px;
+      max-width: 1200px;
+      margin: 28px auto;
+      padding: 0 24px;
+    }
+    @media (max-width: 860px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+
+    /* ---------- Cards ---------- */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--card-r);
+      padding: 24px;
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      margin-bottom: 18px;
+    }
+
+    /* ---------- Form elements ---------- */
+    label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; margin-top: 16px; }
+    label:first-of-type { margin-top: 0; }
+
+    input[type="text"], textarea, select {
+      width: 100%;
+      background: #1e1e35;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      padding: 10px 12px;
+      outline: none;
+      transition: border-color .2s;
+      resize: vertical;
+    }
+    input[type="text"]:focus,
+    textarea:focus,
+    select:focus { border-color: var(--accent2); }
+
+    textarea { min-height: 80px; }
+    #lyricsWrap textarea { min-height: 120px; font-family: monospace; font-size: 13px; }
+
+    /* Mode toggle */
+    .mode-tabs {
+      display: flex;
+      background: #1e1e35;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .mode-tabs button {
+      flex: 1; border: none; background: none;
+      color: var(--muted); font-size: 14px; padding: 9px;
+      cursor: pointer; transition: background .15s, color .15s;
+    }
+    .mode-tabs button.active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    /* ---------- Captcha section ---------- */
+    .captcha-box {
+      background: #111127;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px;
+      margin-top: 20px;
+    }
+    .captcha-box h3 {
+      font-size: 14px; font-weight: 600; margin-bottom: 14px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .captcha-box h3 span.badge {
+      background: var(--accent);
+      color: #fff; font-size: 11px;
+      padding: 2px 8px; border-radius: 20px;
+    }
+
+    .steps { list-style: none; counter-reset: step; }
+    .steps li {
+      counter-increment: step;
+      display: flex; gap: 12px; align-items: flex-start;
+      margin-bottom: 12px; font-size: 13px; color: var(--muted);
+    }
+    .steps li::before {
+      content: counter(step);
+      min-width: 22px; height: 22px;
+      background: var(--accent); color: #fff;
+      border-radius: 50%; font-size: 11px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; margin-top: 1px;
+    }
+    .steps li strong { color: var(--text); }
+
+    .code-copy {
+      background: #0d0d1e;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 10px 12px;
+      font-family: 'Consolas', monospace;
+      font-size: 12px;
+      color: #a5b4fc;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px; margin: 8px 0;
+      word-break: break-all;
+    }
+    .code-copy button {
+      background: var(--accent);
+      border: none; border-radius: 5px;
+      color: #fff; font-size: 11px; padding: 4px 10px;
+      cursor: pointer; flex-shrink: 0; transition: opacity .15s;
+    }
+    .code-copy button:hover { opacity: .85; }
+
+    .btn-open-site {
+      display: inline-flex; align-items: center; gap: 7px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff; border: none; border-radius: 8px;
+      padding: 9px 18px; font-size: 13px; font-weight: 600;
+      cursor: pointer; text-decoration: none; margin-bottom: 14px;
+      transition: opacity .15s;
+    }
+    .btn-open-site:hover { opacity: .9; }
+
+    /* ---------- Token input ---------- */
+    #tokenInput {
+      font-family: monospace; font-size: 12px;
+      background: #0d0d1e; color: #a5b4fc;
+      min-height: 56px;
+    }
+    .token-status {
+      font-size: 12px; margin-top: 6px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .token-status.ok    { color: var(--green); }
+    .token-status.error { color: var(--red); }
+
+    /* ---------- Generate button ---------- */
+    #generateBtn {
+      width: 100%; margin-top: 22px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border: none; border-radius: 10px;
+      color: #fff; font-size: 16px; font-weight: 700;
+      padding: 13px; cursor: pointer;
+      transition: opacity .2s, transform .1s;
+    }
+    #generateBtn:hover:not(:disabled) { opacity: .9; transform: translateY(-1px); }
+    #generateBtn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+
+    /* ---------- Jobs panel ---------- */
+    .jobs-empty {
+      text-align: center; padding: 60px 20px;
+      color: var(--muted); font-size: 14px;
+    }
+    .jobs-empty .icon { font-size: 48px; display: block; margin-bottom: 12px; }
+
+    .job-item {
+      background: #111127;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px;
+      margin-bottom: 14px;
+    }
+    .job-header {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      margin-bottom: 10px;
+    }
+    .job-title { font-weight: 600; font-size: 14px; }
+    .job-meta  { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+    .status-badge {
+      font-size: 11px; font-weight: 700; padding: 3px 10px;
+      border-radius: 20px; text-transform: uppercase; letter-spacing: .5px;
+      flex-shrink: 0;
+    }
+    .status-queued  { background: #1e3a1e; color: var(--yellow); }
+    .status-running { background: #1e2a3a; color: #60a5fa; }
+    .status-ok      { background: #1a3a1a; color: var(--green); }
+    .status-failed,
+    .status-error   { background: #3a1a1a; color: var(--red); }
+    .status-timeout { background: #2a2a1a; color: var(--yellow); }
+
+    /* Log terminal */
+    .log-box {
+      background: #080810;
+      border: 1px solid #1e1e35;
+      border-radius: 7px;
+      padding: 10px 12px;
+      font-family: 'Consolas', monospace;
+      font-size: 12px;
+      color: #8b8ba8;
+      max-height: 160px;
+      overflow-y: auto;
+      margin-top: 10px;
+      line-height: 1.6;
+    }
+    .log-line { white-space: pre-wrap; word-break: break-all; }
+    .log-line.poll  { color: #60a5fa; }
+    .log-line.ok    { color: var(--green); }
+    .log-line.error { color: var(--red); }
+
+    /* Audio player */
+    .audio-wrap {
+      margin-top: 14px;
+      background: #0d1a0d;
+      border: 1px solid #1a3a1a;
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .audio-wrap p { font-size: 13px; color: var(--green); font-weight: 600; margin-bottom: 10px; }
+    audio { width: 100%; border-radius: 6px; }
+    .audio-link {
+      display: inline-block; margin-top: 8px;
+      font-size: 12px; color: #a5b4fc; word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🎵</div>
+  <div>
+    <h1>musichero.ai Generator</h1>
+    <p>Generate AI music via musichero.ai API</p>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- ===================== LEFT: FORM ===================== -->
+  <div>
+
+    <div class="card">
+      <div class="card-title">Song Settings</div>
+
+      <label>Generation Mode</label>
+      <div class="mode-tabs">
+        <button id="modeSimple" class="active" onclick="setMode('simple')">Simple</button>
+        <button id="modeCustom" onclick="setMode('custom')">Custom</button>
+      </div>
+
+      <label for="promptInput" id="promptLabel">Style / Mood (prompt)</label>
+      <textarea id="promptInput" placeholder="e.g. Upbeat electronic pop with dreamy synths and female vocals"></textarea>
+
+      <div id="customWrap" style="display:none">
+        <label for="titleInput">Song Title</label>
+        <input type="text" id="titleInput" placeholder="My Song" />
+
+        <div id="lyricsWrap">
+          <label for="lyricsInput">Lyrics</label>
+          <textarea id="lyricsInput" placeholder="[Verse 1]&#10;Your lyrics here...&#10;&#10;[Chorus]&#10;..."></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- Captcha card -->
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">Captcha Verification</div>
+
+      <div class="captcha-box">
+        <h3>
+          How to get your captcha token
+          <span class="badge">One-time per song</span>
+        </h3>
+
+        <a class="btn-open-site" href="https://musichero.ai" target="_blank" rel="noopener">
+          🔗 Open musichero.ai
+        </a>
+
+        <ol class="steps">
+          <li>Click the link above — musichero.ai opens in a new tab.</li>
+          <li>On the page, <strong>solve the hCaptcha</strong> (click the checkbox; complete any image challenge).</li>
+          <li>As soon as it is solved, press <strong>F12</strong> and open the <strong>Console</strong> tab.</li>
+          <li>Paste the command below and press <strong>Enter</strong>:</li>
+        </ol>
+
+        <div class="code-copy">
+          <code id="jsCmd">document.querySelector('[name="h-captcha-response"]').value</code>
+          <button onclick="copyCmd()">Copy</button>
+        </div>
+
+        <ol class="steps" style="counter-reset: step 4">
+          <li>The console prints a long token starting with <strong>P0_eyJ…</strong></li>
+          <li>Copy it and paste it in the field below.</li>
+        </ol>
+
+        <label for="tokenInput" style="margin-top:14px">Captcha Token</label>
+        <textarea id="tokenInput" rows="3"
+          placeholder="P0_eyJ..."
+          oninput="validateToken()"></textarea>
+        <div id="tokenStatus" class="token-status" style="display:none"></div>
+      </div>
+
+      <button id="generateBtn" disabled onclick="generate()">
+        Generate Song
+      </button>
+    </div>
+
+  </div>
+
+  <!-- ===================== RIGHT: JOBS ===================== -->
+  <div>
+    <div class="card" style="min-height:300px">
+      <div class="card-title">Generation Jobs</div>
+      <div id="jobsContainer">
+        <div class="jobs-empty">
+          <span class="icon">🎶</span>
+          No jobs yet — fill in the form and click <strong>Generate Song</strong>.
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  let mode = 'simple';
+  const jobs = {};   // job_id -> { title, prompt, pollTimer }
+
+  // ---- Mode toggle ----
+  function setMode(m) {
+    mode = m;
+    document.getElementById('modeSimple').classList.toggle('active', m === 'simple');
+    document.getElementById('modeCustom').classList.toggle('active', m === 'custom');
+    document.getElementById('customWrap').style.display = m === 'custom' ? 'block' : 'none';
+  }
+
+  // ---- Copy JS command ----
+  function copyCmd() {
+    const txt = document.getElementById('jsCmd').textContent;
+    navigator.clipboard.writeText(txt).then(() => {
+      const btn = document.querySelector('.code-copy button');
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = 'Copy', 1500);
+    });
+  }
+
+  // ---- Token validation ----
+  function validateToken() {
+    const token = document.getElementById('tokenInput').value.trim();
+    const el     = document.getElementById('tokenStatus');
+    const btn    = document.getElementById('generateBtn');
+
+    if (!token) {
+      el.style.display = 'none';
+      btn.disabled = true;
+      return;
+    }
+    el.style.display = 'flex';
+    if (token.length < 20) {
+      el.className = 'token-status error';
+      el.innerHTML = '✗ Token too short — copy the full value from the console.';
+      btn.disabled = true;
+    } else {
+      el.className = 'token-status ok';
+      el.innerHTML = `✓ Token looks valid (${token.length} chars)`;
+      btn.disabled = false;
+    }
+  }
+
+  // ---- Generate ----
+  async function generate() {
+    const token  = document.getElementById('tokenInput').value.trim();
+    const prompt = document.getElementById('promptInput').value.trim();
+    const title  = document.getElementById('titleInput').value.trim() || 'Untitled';
+    const lyrics = document.getElementById('lyricsInput').value.trim();
+
+    if (!prompt) { alert('Please enter a prompt / style description.'); return; }
+    if (token.length < 20) { alert('Please paste a valid captcha token first.'); return; }
+
+    const btn = document.getElementById('generateBtn');
+    btn.disabled = true;
+    btn.textContent = 'Submitting...';
+
+    try {
+      const resp = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ captcha_token: token, mode, prompt, title, lyrics }),
+      });
+      const data = await resp.json();
+
+      if (!resp.ok) {
+        alert('Error: ' + (data.error || resp.statusText));
+        return;
+      }
+
+      addJob(data.job_id, prompt, title, mode);
+
+      // Clear token field after use
+      document.getElementById('tokenInput').value = '';
+      document.getElementById('tokenStatus').style.display = 'none';
+
+    } catch (err) {
+      alert('Request failed: ' + err.message);
+    } finally {
+      btn.textContent = 'Generate Song';
+      btn.disabled    = document.getElementById('tokenInput').value.trim().length < 20;
+    }
+  }
+
+  // ---- Job display ----
+  function addJob(id, prompt, title, mode) {
+    const container = document.getElementById('jobsContainer');
+
+    // Remove empty state
+    const empty = container.querySelector('.jobs-empty');
+    if (empty) empty.remove();
+
+    const el = document.createElement('div');
+    el.className = 'job-item';
+    el.id = 'job-' + id;
+
+    const displayName = mode === 'custom' ? title : prompt.slice(0, 60);
+
+    el.innerHTML = `
+      <div class="job-header">
+        <div>
+          <div class="job-title">${escHtml(displayName)}</div>
+          <div class="job-meta">Mode: ${mode} &nbsp;·&nbsp; ${new Date().toLocaleTimeString()}</div>
+        </div>
+        <span class="status-badge status-queued" id="badge-${id}">Queued</span>
+      </div>
+      <div class="log-box" id="log-${id}"></div>
+      <div id="audio-${id}"></div>
+    `;
+
+    container.insertBefore(el, container.firstChild);
+
+    jobs[id] = { prompt, title, mode };
+    startPolling(id);
+  }
+
+  function startPolling(id) {
+    const timer = setInterval(async () => {
+      try {
+        const resp = await fetch('/api/status/' + id);
+        const data = await resp.json();
+        updateJob(id, data);
+        if (['ok', 'failed', 'error', 'timeout'].includes(data.status)) {
+          clearInterval(timer);
+        }
+      } catch (_) {}
+    }, 2000);
+  }
+
+  function updateJob(id, data) {
+    const badge  = document.getElementById('badge-' + id);
+    const logEl  = document.getElementById('log-' + id);
+    const audioEl = document.getElementById('audio-' + id);
+
+    if (badge) {
+      badge.className = 'status-badge status-' + data.status;
+      badge.textContent = capitalize(data.status);
+    }
+
+    if (logEl && data.logs) {
+      logEl.innerHTML = data.logs.map(line => {
+        let cls = 'log-line';
+        if (line.includes('[poll]'))   cls += ' poll';
+        if (line.includes('ready') || line.includes('finished')) cls += ' ok';
+        if (line.includes('error') || line.includes('failed'))   cls += ' error';
+        return `<div class="${cls}">${escHtml(line)}</div>`;
+      }).join('');
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    if (data.status === 'ok' && data.audio_url && audioEl && !audioEl.hasChildNodes()) {
+      audioEl.innerHTML = `
+        <div class="audio-wrap">
+          <p>✓ Song ready!</p>
+          <audio controls src="${escHtml(data.audio_url)}"></audio>
+          <br/>
+          <a class="audio-link" href="${escHtml(data.audio_url)}" target="_blank" rel="noopener">
+            ${escHtml(data.audio_url)}
+          </a>
+        </div>`;
+    }
+
+    if (data.status === 'error' && data.error && logEl) {
+      const errLine = document.createElement('div');
+      errLine.className = 'log-line error';
+      errLine.textContent = 'Error: ' + data.error;
+      logEl.appendChild(errLine);
+    }
+  }
+
+  function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+</script>
+
+</body>
+</html>
