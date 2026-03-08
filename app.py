@@ -1,25 +1,20 @@
 """
 app.py — musichero.ai Music Generation Web App
 ------------------------------------------------
-Flask web server. Captcha is solved automatically in the background
-using the headless browser bypass engine — users just fill in song
-details and click Generate.
+Flask web server. The hCaptcha widget is shown to the user in the
+browser when they click Generate. On solve, the token is sent to
+the backend along with the song data and generation begins.
 
 Run:  python app.py
 URL:  http://0.0.0.0:5000
 """
 from __future__ import annotations
 
-import os
 import threading
 import uuid
 from flask import Flask, render_template, request, jsonify
 
 import bot_core
-from hcaptcha_bypass import get_hcaptcha_token_bypass
-
-HCAPTCHA_SITEKEY = "6520ce9c-a8b2-4cbe-b698-687e90448dec"
-TARGET_SITE      = "https://musichero.ai"
 
 app = Flask(__name__)
 
@@ -40,31 +35,9 @@ def _run_job_thread(job_id: str, data: dict) -> None:
     with _jobs_lock:
         _jobs[job_id]["status"] = "running"
 
-    # Step 1 — Solve hCaptcha automatically
-    log("[captcha] Solving hCaptcha automatically ...")
-    try:
-        token = get_hcaptcha_token_bypass(
-            sitekey=HCAPTCHA_SITEKEY,
-            host=TARGET_SITE,
-            max_retries=3,
-        )
-        log(f"[captcha] Token obtained ({len(token)} chars) ✓")
-    except RuntimeError as exc:
-        msg = str(exc)
-        if "rate_limited" in msg:
-            log("[captcha] IP rate limited — please wait 1-2 hours and try again.")
-            log("          Or add a HCAPTCHA_PROXY secret to bypass the limit.")
-        else:
-            log(f"[captcha] Failed to solve captcha: {msg}")
-        with _jobs_lock:
-            _jobs[job_id]["status"] = "error"
-            _jobs[job_id]["error"]  = "Captcha solve failed. " + msg
-        return
-
-    # Step 2 — Generate song
     try:
         result = bot_core.run_job(
-            captcha_token=token,
+            captcha_token=data["captcha_token"],
             mode=data.get("mode", "simple"),
             prompt=data.get("prompt", ""),
             title=data.get("title", "Untitled"),
@@ -92,6 +65,10 @@ def index():
 @app.route("/api/generate", methods=["POST"])
 def api_generate():
     data = request.get_json(force=True)
+
+    token = (data.get("captcha_token") or "").strip()
+    if len(token) < 20:
+        return jsonify({"error": "Captcha token missing or invalid."}), 400
 
     prompt = (data.get("prompt") or "").strip()
     if not prompt:
