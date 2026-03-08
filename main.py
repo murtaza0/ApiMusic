@@ -5,9 +5,9 @@ Supports Simple and Custom generation modes with hCaptcha bypass,
 automatic polling, error handling, and unlimited generation loops.
 
 Required environment variables (set in Replit Secrets):
-  CAPTCHA_API_KEY   - Your captcha solver API key
-  CAPTCHA_PROVIDER  - Solver provider: "2captcha" | "capsolver" | "anticaptcha"
-                      (defaults to "2captcha" if not set)
+  CAPTCHA_PROVIDER  - "bypass" (default, free/self-contained) OR
+                      "2captcha" | "capsolver" | "anticaptcha"
+  CAPTCHA_API_KEY   - Only needed when using a paid provider above
 """
 
 import os
@@ -15,6 +15,8 @@ import time
 import uuid
 import random
 import requests
+
+from hcaptcha_bypass import get_hcaptcha_token_bypass
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -37,7 +39,7 @@ CAPTCHA_MAX_RETRIES   = 3
 REQUEST_MAX_RETRIES   = 3
 
 CAPTCHA_API_KEY  = os.getenv("CAPTCHA_API_KEY")
-CAPTCHA_PROVIDER = os.getenv("CAPTCHA_PROVIDER", "2captcha").lower()
+CAPTCHA_PROVIDER = os.getenv("CAPTCHA_PROVIDER", "bypass").lower()
 
 
 # ---------------------------------------------------------------------------
@@ -185,12 +187,27 @@ def _solve_with_anticaptcha(api_key: str) -> str:
 
 def get_hcaptcha_token() -> str:
     """
-    Solve the hCaptcha challenge using the configured provider.
-    Retries up to CAPTCHA_MAX_RETRIES times on failure.
+    Solve the hCaptcha challenge.
+
+    Provider routing (set CAPTCHA_PROVIDER in Replit Secrets):
+      "bypass"     — free, self-contained bypass via hcaptcha_bypass.py (default)
+      "2captcha"   — paid 2captcha.com service
+      "capsolver"  — paid capsolver.com service
+      "anticaptcha"— paid anti-captcha.com service
     """
+    # --- Free self-contained bypass (default) ---
+    if CAPTCHA_PROVIDER == "bypass":
+        return get_hcaptcha_token_bypass(
+            sitekey=HCAPTCHA_SITEKEY,
+            host=TARGET_SITE,
+            max_retries=CAPTCHA_MAX_RETRIES,
+        )
+
+    # --- Paid service providers ---
     if not CAPTCHA_API_KEY:
         raise EnvironmentError(
-            "CAPTCHA_API_KEY is not set. Add it in Replit Secrets."
+            "CAPTCHA_API_KEY is not set. Add it in Replit Secrets, "
+            "or set CAPTCHA_PROVIDER=bypass to use the free bypass."
         )
 
     solver_map = {
@@ -203,7 +220,7 @@ def get_hcaptcha_token() -> str:
     if not solver:
         raise ValueError(
             f"Unknown CAPTCHA_PROVIDER '{CAPTCHA_PROVIDER}'. "
-            f"Choose from: {list(solver_map.keys())}"
+            f"Choose from: bypass, {', '.join(solver_map.keys())}"
         )
 
     for attempt in range(1, CAPTCHA_MAX_RETRIES + 1):
@@ -401,7 +418,9 @@ def run_generation_loop(songs: list[dict]) -> None:
         print(f"  Prompt: {prompt[:80]}")
         print(f"{'─'*60}")
 
-        success = create_song(session, mode, **song)
+        # Strip keys that are not kwargs for create_song to avoid duplicate argument errors
+        song_kwargs = {k: v for k, v in song.items() if k not in ("mode",)}
+        success = create_song(session, mode, **song_kwargs)
         if not success:
             print(f"[loop] Skipping song {idx} — creation request failed.")
             results.append({"index": idx, "status": "failed", "url": None})
