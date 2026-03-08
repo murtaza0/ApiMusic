@@ -1,12 +1,14 @@
 """
 musichero.ai Music Generation Bot
 ----------------------------------
-Supports Simple and Custom generation modes with hCaptcha bypass,
-automatic polling, error handling, and unlimited generation loops.
+Supports Simple and Custom generation modes with manual or automated
+hCaptcha solving, automatic polling, error handling, and unlimited
+generation loops.
 
-Required environment variables (set in Replit Secrets):
-  CAPTCHA_PROVIDER  - "bypass" (default, free/self-contained) OR
-                      "2captcha" | "capsolver" | "anticaptcha"
+Environment variables (set in Replit Secrets):
+  CAPTCHA_PROVIDER  - "manual" (default — you solve in browser) OR
+                      "bypass"      (free automated headless solver) OR
+                      "2captcha" | "capsolver" | "anticaptcha" (paid)
   CAPTCHA_API_KEY   - Only needed when using a paid provider above
 """
 
@@ -39,7 +41,7 @@ CAPTCHA_MAX_RETRIES   = 3
 REQUEST_MAX_RETRIES   = 3
 
 CAPTCHA_API_KEY  = os.getenv("CAPTCHA_API_KEY")
-CAPTCHA_PROVIDER = os.getenv("CAPTCHA_PROVIDER", "bypass").lower()
+CAPTCHA_PROVIDER = os.getenv("CAPTCHA_PROVIDER", "manual").lower()
 
 
 # ---------------------------------------------------------------------------
@@ -185,17 +187,80 @@ def _solve_with_anticaptcha(api_key: str) -> str:
     raise RuntimeError("Anti-Captcha: timed out waiting for solution")
 
 
+def _solve_manually() -> str:
+    """
+    Ask the user to solve hCaptcha in their own browser and paste the token
+    back into the terminal.
+
+    Steps shown to the user:
+      1. Open https://musichero.ai in a browser
+      2. Solve the hCaptcha checkbox
+      3. Open DevTools Console (F12)
+      4. Run the one-liner to copy the token
+      5. Paste it here
+    """
+    print()
+    print("━" * 62)
+    print("  MANUAL CAPTCHA  —  آپ کو خود captcha solve کرنا ہے")
+    print("━" * 62)
+    print()
+    print("  Step 1  →  اپنے browser میں یہ link کھولیں:")
+    print("             https://musichero.ai")
+    print()
+    print("  Step 2  →  صفحے پر hCaptcha checkbox نظر آئے گا,")
+    print("             اسے solve کریں (images select کریں)۔")
+    print()
+    print("  Step 3  →  Solve ہونے کے فوری بعد F12 دبائیں")
+    print("             اور Console tab کھولیں۔")
+    print()
+    print("  Step 4  →  Console میں یہ command paste کریں اور Enter دبائیں:")
+    print()
+    print("    document.querySelector('[name=\"h-captcha-response\"]').value")
+    print()
+    print("  Step 5  →  جو لمبا text آئے (P0_eyJ... سے شروع ہوگا)")
+    print("             اسے copy کریں اور نیچے paste کریں۔")
+    print()
+    print("━" * 62)
+
+    while True:
+        try:
+            token = input("  Token paste کریں یہاں: ").strip()
+        except EOFError:
+            raise RuntimeError(
+                "Manual captcha: no input received (stdin closed). "
+                "Run the bot in an interactive terminal."
+            )
+
+        if not token:
+            print("  [!] Token خالی ہے — دوبارہ try کریں۔")
+            continue
+
+        # Basic sanity check — hCaptcha tokens start with "P0_" and are long
+        if len(token) < 20:
+            print(f"  [!] Token بہت چھوٹا لگتا ہے ({len(token)} chars) — پوری value copy کریں۔")
+            continue
+
+        print(f"  [manual] Token مل گیا ({len(token)} chars) ✓")
+        print()
+        return token
+
+
 def get_hcaptcha_token() -> str:
     """
     Solve the hCaptcha challenge.
 
     Provider routing (set CAPTCHA_PROVIDER in Replit Secrets):
-      "bypass"     — free, self-contained bypass via hcaptcha_bypass.py (default)
+      "manual"     — you solve it in your browser (default)
+      "bypass"     — free automated headless browser solver
       "2captcha"   — paid 2captcha.com service
       "capsolver"  — paid capsolver.com service
       "anticaptcha"— paid anti-captcha.com service
     """
-    # --- Free self-contained bypass (default) ---
+    # --- Manual: user solves in their own browser ---
+    if CAPTCHA_PROVIDER == "manual":
+        return _solve_manually()
+
+    # --- Free self-contained automated bypass ---
     if CAPTCHA_PROVIDER == "bypass":
         return get_hcaptcha_token_bypass(
             sitekey=HCAPTCHA_SITEKEY,
@@ -207,7 +272,7 @@ def get_hcaptcha_token() -> str:
     if not CAPTCHA_API_KEY:
         raise EnvironmentError(
             "CAPTCHA_API_KEY is not set. Add it in Replit Secrets, "
-            "or set CAPTCHA_PROVIDER=bypass to use the free bypass."
+            "or set CAPTCHA_PROVIDER=manual to solve captchas yourself."
         )
 
     solver_map = {
@@ -220,7 +285,7 @@ def get_hcaptcha_token() -> str:
     if not solver:
         raise ValueError(
             f"Unknown CAPTCHA_PROVIDER '{CAPTCHA_PROVIDER}'. "
-            f"Choose from: bypass, {', '.join(solver_map.keys())}"
+            f"Choose from: manual, bypass, {', '.join(solver_map.keys())}"
         )
 
     for attempt in range(1, CAPTCHA_MAX_RETRIES + 1):
