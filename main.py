@@ -23,11 +23,7 @@ def main():
 
     cookie = COOKIE
     if not cookie:
-        print("\nPaste your anymusic.ai Cookie header value below")
-        print("(from DevTools → Network → any request → Cookie header):\n")
-        cookie = input("> ").strip()
-        if not cookie:
-            print("[!] No cookie provided — requests may fail.")
+        print("[setup] No ANYMUSIC_COOKIE set — cookies will be auto-generated.")
 
     songs = [
         {

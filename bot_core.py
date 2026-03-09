@@ -86,37 +86,96 @@ def _random_clck() -> str:
     return f"{part}%5E2%5Eg{num1}%5E0%5E{num2}"
 
 
+def _random_ga4(property_id: str = "9R01R8BKDB") -> str:
+    """GA4 session cookie: GS2.1.s{ts}$o1$g0$t{ts}$j60$l0$h0"""
+    ts = int(time.time()) - random.randint(0, 3600)
+    return f"GS2.1.s{ts}$o1$g0$t{ts}$j60$l0$h0"
+
+
+def _random_clsk() -> str:
+    """MS Clarity session cookie."""
+    ts = int(time.time())
+    part = _rand_str(8)
+    return f"{part}%5E{ts}%5E1%5E1%5El.clarity.ms%2Fcollect"
+
+
+def auto_generate_cookies() -> str:
+    """
+    Generate a full realistic-looking cookie string for anymusic.ai.
+    Mimics the 4 tracking cookies that a real browser would have after
+    visiting the site — no manual extraction required.
+
+    Cookies generated:
+      _ga              — Google Analytics client ID
+      _ga_9R01R8BKDB   — GA4 session data
+      _clck            — Microsoft Clarity click fingerprint
+      _clsk            — Microsoft Clarity session
+    """
+    ga   = _random_ga()
+    ga4  = _random_ga4()
+    clck = _random_clck()
+    clsk = _random_clsk()
+    return f"_ga={ga}; _ga_9R01R8BKDB={ga4}; _clck={clck}; _clsk={clsk}"
+
+
 def _rotate_cookies(base_cookie: str) -> str:
     """
     Parse the base cookie string and replace _ga (main) and _clck with fresh
     random values. Called every 3 requests to simulate a new user session.
     """
+    if not base_cookie:
+        return auto_generate_cookies()
+
     parts = [p.strip() for p in base_cookie.split(";") if p.strip()]
     result = []
     had_ga   = False
     had_clck = False
+    had_ga4  = False
+    had_clsk = False
 
     for p in parts:
-        if re.match(r"^_ga=(?!GA\d\.\d\.\d+\.\d+\?)", p) and "_ga_" not in p:
+        if p.startswith("_ga=") and "_ga_" not in p:
             result.append(f"_ga={_random_ga()}")
             had_ga = True
+        elif p.startswith("_ga_"):
+            result.append(f"_ga_9R01R8BKDB={_random_ga4()}")
+            had_ga4 = True
         elif p.startswith("_clck="):
             result.append(f"_clck={_random_clck()}")
             had_clck = True
+        elif p.startswith("_clsk="):
+            result.append(f"_clsk={_random_clsk()}")
+            had_clsk = True
         else:
             result.append(p)
 
-    if not had_ga:
-        result.insert(0, f"_ga={_random_ga()}")
-    if not had_clck:
-        result.append(f"_clck={_random_clck()}")
+    if not had_ga:   result.insert(0, f"_ga={_random_ga()}")
+    if not had_ga4:  result.append(f"_ga_9R01R8BKDB={_random_ga4()}")
+    if not had_clck: result.append(f"_clck={_random_clck()}")
+    if not had_clsk: result.append(f"_clsk={_random_clsk()}")
 
     return "; ".join(result)
 
 
+# Per-session cookie cache — regenerated every 3 requests
+_session_cookie: str = ""
+_request_count  = 0
+
+
 def _get_cookie(base_cookie: str) -> str:
-    global _request_count
+    """
+    Returns the cookie to use for this request.
+    - If base_cookie provided: use it, rotate every 3rd request
+    - If no base_cookie: auto-generate tracking cookies, rotate every 3rd request
+    """
+    global _request_count, _session_cookie
     _request_count += 1
+
+    if not base_cookie:
+        if not _session_cookie or _request_count % 3 == 0:
+            _session_cookie = auto_generate_cookies()
+        return _session_cookie
+
     if _request_count % 3 == 0:
         return _rotate_cookies(base_cookie)
     return base_cookie

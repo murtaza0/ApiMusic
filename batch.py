@@ -40,24 +40,13 @@ MAX_PROMPTS  = 5
 # ---------------------------------------------------------------------------
 
 def get_cookie() -> str:
+    """
+    Return saved cookie or empty string (bot_core auto-generates cookies if empty).
+    """
     cookie = os.getenv("ANYMUSIC_COOKIE", "").strip()
     if cookie:
-        print(f"[setup] Using ANYMUSIC_COOKIE from environment.")
-        return cookie
-
-    print()
-    print("=" * 60)
-    print("  anymusic.ai Batch Generator")
-    print("=" * 60)
-    print()
-    print("Paste your anymusic.ai Cookie header value below.")
-    print("(DevTools → Network → any request → Cookie header)")
-    print("Leave empty to skip authentication (may fail).\n")
-    try:
-        val = input("Cookie > ").strip()
-    except (EOFError, KeyboardInterrupt):
-        val = ""
-    return val
+        print("[setup] Using ANYMUSIC_COOKIE from environment.")
+    return cookie
 
 
 # ---------------------------------------------------------------------------

@@ -72,9 +72,9 @@ def _run_job_thread(job_id: str, data: dict, cookie: str) -> None:
 @app.route("/")
 def index():
     with _cookie_lock:
-        has_cookie = bool(_saved_cookie)
+        manual_cookie = bool(_saved_cookie)
     return render_template("index.html",
-                           has_cookie=has_cookie,
+                           manual_cookie=manual_cookie,
                            genres=bot_core.GENRES,
                            styles=bot_core.STYLES,
                            moods=bot_core.MOODS,

@@ -116,46 +116,61 @@
     }
     .mode-tabs button.active { background: var(--accent); color: #fff; }
 
-    /* ── Cookie settings ── */
-    .cookie-bar {
-      display: flex; align-items: center; gap: 8px;
+    /* ── Session status ── */
+    .session-bar {
+      display: flex; align-items: center; gap: 10px;
       font-size: 13px; padding: 10px 14px;
-      background: #0e0e20; border: 1px solid var(--border);
-      border-radius: 8px; margin-bottom: 16px; cursor: pointer;
+      background: #0a160a; border: 1px solid #1a3a1a;
+      border-radius: 8px; margin-bottom: 4px;
+    }
+    .session-dot {
+      width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+      background: var(--green);
+      box-shadow: 0 0 6px rgba(34,197,94,.5);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%,100% { opacity: 1; } 50% { opacity: .5; }
+    }
+    .session-label { flex: 1; color: var(--text); }
+    .session-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    /* ── Advanced / manual cookie override ── */
+    .adv-toggle {
+      font-size: 11px; color: var(--muted); cursor: pointer;
+      text-align: right; padding: 4px 0 12px;
+      display: block; text-decoration: none;
       user-select: none;
     }
-    .cookie-bar:hover { border-color: var(--accent2); }
-    .cookie-dot {
-      width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
-      background: var(--yellow);
-    }
-    .cookie-dot.set { background: var(--green); }
-    .cookie-bar-label { flex: 1; }
-    .cookie-bar-arrow { color: var(--muted); font-size: 11px; }
+    .adv-toggle:hover { color: var(--text); }
 
-    .cookie-panel {
+    .adv-panel {
       display: none; background: #0a0a1c;
       border: 1px solid var(--border); border-radius: 10px;
-      padding: 16px; margin-bottom: 16px;
+      padding: 14px; margin-bottom: 14px;
     }
-    .cookie-panel.open { display: block; }
-
-    .cookie-panel p {
+    .adv-panel.open { display: block; }
+    .adv-panel p {
       font-size: 12px; color: var(--muted); line-height: 1.6; margin-bottom: 10px;
     }
-    .cookie-panel textarea {
-      min-height: 64px; font-family: monospace; font-size: 12px;
+    .adv-panel textarea {
+      min-height: 56px; font-family: monospace; font-size: 12px;
     }
     .btn-save-cookie {
-      margin-top: 10px; background: var(--accent);
-      border: none; border-radius: 7px;
-      color: #fff; font-size: 13px; font-weight: 600;
-      padding: 8px 18px; cursor: pointer;
-      transition: opacity .2s;
+      margin-top: 10px; background: #252540;
+      border: 1px solid var(--border); border-radius: 7px;
+      color: var(--text); font-size: 12px; font-weight: 600;
+      padding: 7px 16px; cursor: pointer; transition: background .2s;
     }
-    .btn-save-cookie:hover { opacity: .85; }
+    .btn-save-cookie:hover { background: var(--accent); border-color: var(--accent); }
+    .manual-badge {
+      display: none; margin-left: 8px; font-size: 11px;
+      background: #1a2035; color: var(--blue);
+      padding: 2px 8px; border-radius: 10px; border: 1px solid var(--blue);
+    }
+    .manual-badge.show { display: inline; }
     .cookie-saved-msg {
-      margin-left: 10px; font-size: 12px; color: var(--green);
+      margin-left: 8px; font-size: 12px; color: var(--green);
       opacity: 0; transition: opacity .3s;
     }
     .cookie-saved-msg.show { opacity: 1; }
@@ -255,7 +270,7 @@
   <div class="logo">🎵</div>
   <div>
     <h1>anymusic.ai Generator</h1>
-    <p>Generate AI music — no captcha required</p>
+    <p>Generate AI music — no setup required, just describe your song</p>
   </div>
 </header>
 
@@ -264,27 +279,35 @@
   <!-- ═══ LEFT: FORM ═══ -->
   <div>
 
-    <!-- Cookie Settings -->
+    <!-- Session Status -->
     <div class="card">
-      <div class="card-title">Session Settings</div>
+      <div class="card-title">Session</div>
 
-      <div class="cookie-bar" onclick="toggleCookiePanel()" id="cookieBar">
-        <span class="cookie-dot" id="cookieDot"></span>
-        <span class="cookie-bar-label" id="cookieBarLabel">Loading cookie status...</span>
-        <span class="cookie-bar-arrow" id="cookieArrow">▼</span>
+      <div class="session-bar">
+        <span class="session-dot"></span>
+        <div>
+          <div class="session-label">
+            Auto-session active
+            <span class="manual-badge" id="manualBadge">Manual override</span>
+          </div>
+          <div class="session-sub">Cookies auto-generated — no setup needed</div>
+        </div>
       </div>
 
-      <div class="cookie-panel" id="cookiePanel">
+      <span class="adv-toggle" onclick="toggleAdv()" id="advToggle">
+        ▸ Advanced: override session cookie
+      </span>
+
+      <div class="adv-panel" id="advPanel">
         <p>
-          Open <strong>anymusic.ai</strong> in your browser, open DevTools
-          (F12) → Network tab → click any request → copy the full
-          <strong>Cookie</strong> header value and paste it below.
+          Paste your own <strong>Cookie</strong> header from anymusic.ai (F12 → Network
+          → any request). Leave empty to use auto-generated cookies.
         </p>
-        <label for="cookieInput">Cookie string</label>
         <textarea id="cookieInput"
-          placeholder="_ga=GA1.1.xxx...; _ga_9R01R8BKDB=...; ..."></textarea>
-        <div style="display:flex; align-items:center; margin-top:10px;">
-          <button class="btn-save-cookie" onclick="saveCookie()">Save Cookie</button>
+          placeholder="_ga=GA1.1.xxx...; _ga_9R01R8BKDB=...; ..."
+          rows="3"></textarea>
+        <div style="display:flex; align-items:center;">
+          <button class="btn-save-cookie" onclick="saveCookie()">Apply</button>
           <span class="cookie-saved-msg" id="cookieSavedMsg">Saved!</span>
         </div>
       </div>
@@ -375,33 +398,13 @@
 <script>
   let mode = 'simple';
 
-  // ── Init: load cookie status ──
-  async function loadCookieStatus() {
-    try {
-      const r = await fetch('/api/cookie-status');
-      const d = await r.json();
-      updateCookieDot(d.has_cookie);
-    } catch (_) {}
-  }
-
-  function updateCookieDot(hasIt) {
-    const dot   = document.getElementById('cookieDot');
-    const label = document.getElementById('cookieBarLabel');
-    if (hasIt) {
-      dot.classList.add('set');
-      label.textContent = 'Session cookie set — ready to generate';
-    } else {
-      dot.classList.remove('set');
-      label.textContent = 'No cookie set — click to configure';
-    }
-  }
-
-  // ── Cookie panel toggle ──
-  let panelOpen = false;
-  function toggleCookiePanel() {
-    panelOpen = !panelOpen;
-    document.getElementById('cookiePanel').classList.toggle('open', panelOpen);
-    document.getElementById('cookieArrow').textContent = panelOpen ? '▲' : '▼';
+  // ── Advanced panel toggle ──
+  let advOpen = false;
+  function toggleAdv() {
+    advOpen = !advOpen;
+    document.getElementById('advPanel').classList.toggle('open', advOpen);
+    document.getElementById('advToggle').textContent =
+      (advOpen ? '▾' : '▸') + ' Advanced: override session cookie';
   }
 
   async function saveCookie() {
@@ -413,18 +416,22 @@
         body: JSON.stringify({ cookie: val }),
       });
       const d = await r.json();
-      updateCookieDot(d.has_cookie);
+      document.getElementById('manualBadge').classList.toggle('show', d.has_cookie);
       const msg = document.getElementById('cookieSavedMsg');
       msg.classList.add('show');
       setTimeout(() => msg.classList.remove('show'), 2000);
-      if (d.has_cookie) {
-        panelOpen = false;
-        document.getElementById('cookiePanel').classList.remove('open');
-        document.getElementById('cookieArrow').textContent = '▼';
-      }
     } catch (e) {
       alert('Failed to save cookie: ' + e.message);
     }
+  }
+
+  // ── Init: check if manual cookie is already set ──
+  async function loadCookieStatus() {
+    try {
+      const r = await fetch('/api/cookie-status');
+      const d = await r.json();
+      document.getElementById('manualBadge').classList.toggle('show', d.has_cookie);
+    } catch (_) {}
   }
 
   // ── Mode toggle ──
