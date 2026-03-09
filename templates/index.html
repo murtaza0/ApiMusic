@@ -545,12 +545,15 @@
       // Check if audio URL came back directly in the generate response (synchronous generation)
       const directAudio = extractAudioUrl(data);
       if (directAudio) {
-        jobLog(jobId, '[generate] Audio ready immediately: ' + directAudio);
+        jobLog(jobId, '[generate] Audio ready — downloading to server...');
         setStep(jobId, 'poll', 'done');
         setStep(jobId, 'done', 'done');
         setBadge(jobId, 'ok');
+        // Show CDN URL immediately so user doesn't wait
         showAudio(jobId, directAudio);
-        notifyServer(extractTaskId(data) || jobId, directAudio);
+        // Then swap to local server URL once backend download finishes
+        const taskId = extractTaskId(data) || jobId;
+        notifyServer(taskId, directAudio, jobId);
         return;
       }
 
@@ -627,7 +630,7 @@
           setStep(jobId, 'done', 'done');
           setBadge(jobId, 'ok');
           showAudio(jobId, result);
-          notifyServer(taskId, result);
+          notifyServer(taskId, result, jobId);
           return;
         }
       } catch (e) {
@@ -665,14 +668,38 @@
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-  async function notifyServer(taskId, audioUrl) {
+  async function notifyServer(taskId, audioUrl, jobId) {
     try {
-      await fetch('/api/notify', {
+      jobLog(jobId, '[server] Saving MP3 to server...');
+      const r = await fetch('/api/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ task_id: taskId, audio_url: audioUrl }),
       });
-    } catch (_) {}
+      const d = await r.json();
+      if (d.ok && d.local_url) {
+        jobLog(jobId, '[server] Saved: ' + d.local_url);
+        // Swap audio player to local server URL
+        swapAudioSrc(jobId, d.local_url);
+      } else {
+        jobLog(jobId, '[server] Using CDN URL (server download failed)');
+      }
+    } catch (e) {
+      jobLog(jobId, '[server] Could not save to server: ' + e.message);
+    }
+  }
+
+  function swapAudioSrc(jobId, localUrl) {
+    const resEl = document.getElementById('result-' + jobId);
+    if (!resEl) return;
+    const audio = resEl.querySelector('audio');
+    const link  = resEl.querySelector('a.audio-url');
+    if (audio) audio.src = localUrl;
+    if (link)  { link.href = localUrl; link.textContent = localUrl; }
+    const saved = document.createElement('div');
+    saved.style.cssText = 'font-size:11px;color:var(--muted);margin-top:6px;';
+    saved.textContent = '✓ Saved on server: ' + localUrl;
+    resEl.querySelector('.audio-wrap')?.appendChild(saved);
   }
 
   // ── Job card helpers ──
