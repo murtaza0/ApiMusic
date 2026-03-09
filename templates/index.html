@@ -578,6 +578,9 @@
     }
 
     if (data.status === 'ok' && data.audio_url && resEl && !resEl.hasChildNodes()) {
+      const localLine = data.local_path
+        ? `<div style="font-size:11px;color:var(--muted);margin-top:6px;">Saved: ${esc(data.local_path)}</div>`
+        : '';
       resEl.innerHTML = `
         <div class="audio-wrap">
           <div class="ready-label">✓ Song ready!</div>
@@ -586,6 +589,7 @@
           <a class="audio-url" href="${esc(data.audio_url)}" target="_blank" rel="noopener">
             ${esc(data.audio_url)}
           </a>
+          ${localLine}
         </div>`;
     }
 

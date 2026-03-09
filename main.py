@@ -41,14 +41,16 @@ def main():
         print(f"\nSong {idx}/{len(songs)} — {song['prompt'][:60]}")
         result = bot_core.run_job(
             cookie=cookie,
-            mode=song.get("mode", "simple"),
+            mode=song.get("mode", "lyrics-to-song"),
             prompt=song.get("prompt", ""),
-            genre=song.get("genre", "Pop"),
-            title=song.get("title", "Untitled"),
-            lyrics=song.get("lyrics", ""),
+            genre=song.get("genre", "Classical"),
+            title=song.get("title", "AI_Track"),
+            lyrics=song.get("prompt", ""),
+            auto_download=True,
         )
         if result["status"] == "ok":
-            print(f"[OK] Audio URL: {result['audio_url']}")
+            print(f"[OK] Audio URL : {result['audio_url']}")
+            print(f"[OK] Local file: {result['local_path']}")
         else:
             print(f"[FAIL] Status: {result['status']}")
 

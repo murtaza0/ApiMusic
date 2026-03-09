@@ -1,0 +1,45 @@
+# anymusic.ai Batch Prompts
+# --------------------------
+# Separate each song with  ---  on its own line.
+# Maximum 5 songs per run.
+#
+# Lyrics mode (default): write your full lyrics.
+#   Add  → title::Your Title  on the last line for a custom title.
+#
+# Text-to-song mode: start with  text-to-song::
+#   Add  → genre::Pop  for genre control.
+
+Verse 1:
+City lights are shining bright tonight
+I'll wait for you until the morning light
+Love is the theme that never ends
+Bringing our hearts together again
+
+Chorus:
+Eternal love will always be
+The thing that sets our hearts free
+No matter where we go, you're always in my soul → title::Eternal Love
+
+---
+
+Verse 1:
+Walking down the empty street
+Raindrops falling at my feet
+Everything reminds me of you
+I don't know what else to do
+
+Chorus:
+Missing you like crazy tonight
+Nothing feels the same without your light → title::Missing You
+
+---
+
+text-to-song::Upbeat electronic pop with driving synths and female vocalist, chasing dreams at night → genre::Electronic
+
+---
+
+text-to-song::Smooth jazz lounge with piano and saxophone, relaxed late night vibes → genre::Jazz
+
+---
+
+text-to-song::Epic orchestral cinematic score building to a powerful climax → genre::Classical

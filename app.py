@@ -40,21 +40,25 @@ def _run_job_thread(job_id: str, data: dict, cookie: str) -> None:
         _jobs[job_id]["status"] = "running"
 
     try:
+        ui_mode = data.get("mode", "custom")
+        api_mode = "text-to-song" if ui_mode == "simple" else "lyrics-to-song"
         result = bot_core.run_job(
             cookie=cookie,
-            mode=data.get("mode", "simple"),
+            mode=api_mode,
             prompt=data.get("prompt", ""),
-            genre=data.get("genre", "Pop"),
-            title=data.get("title", "Untitled"),
+            genre=data.get("genre", "Classical"),
+            title=data.get("title", "AI_Track"),
             lyrics=data.get("lyrics", ""),
-            style=data.get("style", "Pop"),
-            mood=data.get("mood", "Happy"),
+            style=data.get("style", "Classical"),
+            mood=data.get("mood", "Romantic"),
             scenario=data.get("scenario", "Urban romance"),
+            auto_download=True,
             log=log,
         )
         with _jobs_lock:
-            _jobs[job_id]["status"]    = result["status"]
-            _jobs[job_id]["audio_url"] = result["audio_url"]
+            _jobs[job_id]["status"]     = result["status"]
+            _jobs[job_id]["audio_url"]  = result["audio_url"]
+            _jobs[job_id]["local_path"] = result.get("local_path")
     except Exception as exc:
         with _jobs_lock:
             _jobs[job_id]["status"] = "error"
@@ -108,10 +112,11 @@ def api_generate():
     job_id = uuid.uuid4().hex
     with _jobs_lock:
         _jobs[job_id] = {
-            "status":    "queued",
-            "logs":      [],
-            "audio_url": None,
-            "error":     None,
+            "status":     "queued",
+            "logs":       [],
+            "audio_url":  None,
+            "local_path": None,
+            "error":      None,
         }
 
     t = threading.Thread(target=_run_job_thread, args=(job_id, data, cookie), daemon=True)
