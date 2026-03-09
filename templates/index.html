@@ -458,7 +458,6 @@
   // anymusic.ai returns Access-Control-Allow-Origin: * so CORS is not an issue.
   const AM_GENERATE = 'https://anymusic.ai/api/music/generate';
   const AM_TASK     = id => `https://anymusic.ai/api/music/task/${id}`;
-  const AM_LIST     = 'https://anymusic.ai/api/music/list';
   // Randomized spoofing helpers — rotated on every request
   const _ACCEPT_LANGS = [
     'en-US,en;q=0.9', 'en-GB,en;q=0.9,en-US;q=0.8',
@@ -486,131 +485,92 @@
     setTimeout(() => el.style.borderColor = '', 1500);
   }
 
-  // ── Single generation request with 504/timeout fallback ──
+  // ── Single generation request ──
+  // No client-side timeout — let the browser wait naturally.
+  // anymusic.ai music generation takes 60-120s. Any AbortController would kill it early.
   async function generateOne(jobId, tag, payload) {
-    const TIMEOUT_MS  = 55000;   // 55s — just under Vercel's 60s hard limit
-    const controller  = new AbortController();
-    const timer       = setTimeout(() => controller.abort(), TIMEOUT_MS);
-    let startedAt     = Date.now();
+    jobLog(jobId, `[${tag}] Waiting for anymusic.ai... (this takes 1-2 min)`);
 
+    let resp;
     try {
-      const resp = await fetch(AM_GENERATE, {
+      resp = await fetch(AM_GENERATE, {
         method:  'POST',
         headers: _freshHeaders(),
         body:    JSON.stringify(payload),
-        signal:  controller.signal,
       });
-      clearTimeout(timer);
-      jobLog(jobId, `[${tag}] HTTP ${resp.status}`);
-
-      // 401/403 = auth problem
-      if (resp.status === 401 || resp.status === 403) {
-        throw new Error(`${tag}: ${resp.status} Unauthorized`);
-      }
-
-      // 504 / 408 / 429 = timeout or rate limit — music may still be generating
-      if (resp.status === 504 || resp.status === 408 || resp.status === 429) {
-        jobLog(jobId, `[${tag}] Timeout — polling list for result...`);
-        return await pollListForResult(jobId, tag, startedAt);
-      }
-
-      if (!resp.ok) {
-        const txt = await resp.text();
-        throw new Error(`${tag}: HTTP ${resp.status} — ${txt.slice(0, 120)}`);
-      }
-
-      const data = await resp.json();
-      jobLog(jobId, `[${tag}] Response: ` + JSON.stringify(data).slice(0, 200));
-
-      // Audio URL in direct response (fast path)
-      const urls = extractAllAudioUrls(data);
-      if (urls.length > 0) {
-        jobLog(jobId, `[${tag}] Audio ready ✓`);
-        return { audioUrl: urls[0], taskId: extractTaskId(data) || tag };
-      }
-
-      // Got task ID — poll for completion
-      const taskId = extractTaskId(data);
-      if (taskId) {
-        jobLog(jobId, `[${tag}] Task ID ${taskId} — polling...`);
-        const url = await pollTaskOne(jobId, tag, taskId);
-        if (url) return { audioUrl: url, taskId };
-        throw new Error(`${tag}: polling timed out`);
-      }
-
-      throw new Error(`${tag}: no audio URL or task ID in response`);
-
     } catch (e) {
-      clearTimeout(timer);
-      if (e.name === 'AbortError') {
-        // Browser-side timeout — try list polling
-        jobLog(jobId, `[${tag}] Request aborted after ${TIMEOUT_MS/1000}s — polling list...`);
-        return await pollListForResult(jobId, tag, startedAt);
-      }
-      throw e;
+      throw new Error(`${tag}: network error — ${e.message}`);
     }
+
+    jobLog(jobId, `[${tag}] HTTP ${resp.status}`);
+
+    if (resp.status === 401 || resp.status === 403) {
+      throw new Error(`${tag}: ${resp.status} — session invalid`);
+    }
+
+    // 429 = rate limited — wait and let caller retry via Promise.allSettled
+    if (resp.status === 429) {
+      throw new Error(`${tag}: rate limited (429) — try again in a moment`);
+    }
+
+    // 504 = anymusic.ai's own server timed out — generation did not complete
+    if (resp.status === 504 || resp.status === 502 || resp.status === 408) {
+      throw new Error(`${tag}: anymusic.ai server timed out (${resp.status}) — try again`);
+    }
+
+    if (!resp.ok) {
+      const txt = await resp.text();
+      throw new Error(`${tag}: HTTP ${resp.status} — ${txt.slice(0, 150)}`);
+    }
+
+    let data;
+    try {
+      data = await resp.json();
+    } catch (_) {
+      throw new Error(`${tag}: non-JSON response`);
+    }
+
+    jobLog(jobId, `[${tag}] Response: ` + JSON.stringify(data).slice(0, 200));
+
+    // Fast path — audio URL in direct response
+    const urls = extractAllAudioUrls(data);
+    if (urls.length > 0) {
+      jobLog(jobId, `[${tag}] Audio ready ✓`);
+      return { audioUrl: urls[0], taskId: extractTaskId(data) || tag };
+    }
+
+    // Task ID returned — poll for completion
+    const taskId = extractTaskId(data);
+    if (taskId) {
+      jobLog(jobId, `[${tag}] Task ID ${taskId} — polling status...`);
+      const url = await pollTaskOne(jobId, tag, taskId);
+      if (url) return { audioUrl: url, taskId };
+      throw new Error(`${tag}: polling timed out after 7 min`);
+    }
+
+    throw new Error(`${tag}: no audio URL or task ID in response`);
   }
 
-  // Poll anymusic.ai list endpoint looking for songs created after startedAt
-  async function pollListForResult(jobId, tag, startedAt) {
-    const DEADLINE  = Date.now() + 7 * 60 * 1000;  // 7 min max
-    const INTERVAL  = 8000;
-    let attempt     = 0;
-
-    while (Date.now() < DEADLINE) {
-      await sleep(INTERVAL);
-      attempt++;
-      try {
-        const r = await fetch(AM_LIST, { headers: _freshHeaders() });
-        if (!r.ok) { jobLog(jobId, `[${tag}] list ${r.status}`); continue; }
-        const d = await r.json();
-        jobLog(jobId, `[${tag}] list attempt ${attempt}: ` + JSON.stringify(d).slice(0, 200));
-
-        // Find the most recent song created after our request started
-        const songs = extractSongList(d);
-        const match = songs.find(s => {
-          const created = s.createdAt || s.created_at || s.createTime || 0;
-          const ts = typeof created === 'string' ? new Date(created).getTime() : Number(created) * 1000;
-          const url = s.audioUrl || s.audio_url || s.audio || s.url || s.fileUrl || s.mp3Url;
-          return url && ts >= startedAt - 5000; // 5s tolerance
-        });
-        if (match) {
-          const url = match.audioUrl || match.audio_url || match.audio || match.url || match.fileUrl || match.mp3Url;
-          jobLog(jobId, `[${tag}] Found in list: ` + url);
-          return { audioUrl: url, taskId: String(match.taskId || match.id || tag) };
-        }
-      } catch (e) {
-        jobLog(jobId, `[${tag}] list error: ` + e.message);
-      }
-    }
-    throw new Error(`${tag}: timed out waiting for result`);
-  }
-
-  function extractSongList(data) {
-    if (Array.isArray(data)) return data;
-    if (!data || typeof data !== 'object') return [];
-    for (const k of ['data','list','items','songs','result','music']) {
-      if (Array.isArray(data[k])) return data[k];
-    }
-    return [];
-  }
-
-  // Poll a specific task ID
+  // Poll a specific task ID until done
   async function pollTaskOne(jobId, tag, taskId) {
-    const DEADLINE  = Date.now() + 7 * 60 * 1000;
-    const INTERVAL  = 8000;
-    let attempt     = 0;
+    const DEADLINE = Date.now() + 7 * 60 * 1000;
+    const INTERVAL = 8000;
+    let attempt    = 0;
 
     while (Date.now() < DEADLINE) {
       await sleep(INTERVAL);
       attempt++;
       try {
         const r = await fetch(AM_TASK(taskId), { headers: _freshHeaders() });
-        if (r.status === 404) { jobLog(jobId, `[${tag}] task 404, retry ${attempt}`); continue; }
+        if (r.status === 404) { jobLog(jobId, `[${tag}] poll ${attempt}: not ready yet`); continue; }
         const d = await r.json();
         const result = parseTaskResult(d, taskId);
-        if (Array.isArray(result) && result.length > 0) return result[0];
-        if (result === null) throw new Error(`${tag}: task failed`);
+        if (Array.isArray(result) && result.length > 0) {
+          jobLog(jobId, `[${tag}] poll ${attempt}: done ✓`);
+          return result[0];
+        }
+        if (result === null) throw new Error(`${tag}: task failed on server`);
+        jobLog(jobId, `[${tag}] poll ${attempt}: still processing...`);
       } catch (e) {
         jobLog(jobId, `[${tag}] poll error: ` + e.message);
       }
@@ -835,8 +795,8 @@
         <span class="status-badge badge-queued" id="badge-${id}">Queued</span>
       </div>
       <div class="progress-steps" id="steps-${id}">
-        <span class="step-pill" id="step-gen-${id}">🎵 Generating</span>
-        <span class="step-pill" id="step-poll-${id}">⏳ Processing</span>
+        <span class="step-pill" id="step-gen-${id}">🎵 Sending (1-2 min)</span>
+        <span class="step-pill" id="step-poll-${id}">⏳ Saving</span>
         <span class="step-pill" id="step-done-${id}">✓ Done</span>
       </div>
       <div class="log-box" id="log-${id}"></div>
