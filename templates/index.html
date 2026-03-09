@@ -458,6 +458,7 @@
   // anymusic.ai returns Access-Control-Allow-Origin: * so CORS is not an issue.
   const AM_GENERATE = 'https://anymusic.ai/api/music/generate';
   const AM_TASK     = id => `https://anymusic.ai/api/music/task/${id}`;
+  const AM_LIST     = 'https://anymusic.ai/api/music/list';
   // Randomized spoofing helpers — rotated on every request
   const _ACCEPT_LANGS = [
     'en-US,en;q=0.9', 'en-GB,en;q=0.9,en-US;q=0.8',
@@ -483,6 +484,138 @@
     el.style.borderColor = 'var(--red)';
     el.focus();
     setTimeout(() => el.style.borderColor = '', 1500);
+  }
+
+  // ── Single generation request with 504/timeout fallback ──
+  async function generateOne(jobId, tag, payload) {
+    const TIMEOUT_MS  = 55000;   // 55s — just under Vercel's 60s hard limit
+    const controller  = new AbortController();
+    const timer       = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    let startedAt     = Date.now();
+
+    try {
+      const resp = await fetch(AM_GENERATE, {
+        method:  'POST',
+        headers: _freshHeaders(),
+        body:    JSON.stringify(payload),
+        signal:  controller.signal,
+      });
+      clearTimeout(timer);
+      jobLog(jobId, `[${tag}] HTTP ${resp.status}`);
+
+      // 401/403 = auth problem
+      if (resp.status === 401 || resp.status === 403) {
+        throw new Error(`${tag}: ${resp.status} Unauthorized`);
+      }
+
+      // 504 / 408 / 429 = timeout or rate limit — music may still be generating
+      if (resp.status === 504 || resp.status === 408 || resp.status === 429) {
+        jobLog(jobId, `[${tag}] Timeout — polling list for result...`);
+        return await pollListForResult(jobId, tag, startedAt);
+      }
+
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error(`${tag}: HTTP ${resp.status} — ${txt.slice(0, 120)}`);
+      }
+
+      const data = await resp.json();
+      jobLog(jobId, `[${tag}] Response: ` + JSON.stringify(data).slice(0, 200));
+
+      // Audio URL in direct response (fast path)
+      const urls = extractAllAudioUrls(data);
+      if (urls.length > 0) {
+        jobLog(jobId, `[${tag}] Audio ready ✓`);
+        return { audioUrl: urls[0], taskId: extractTaskId(data) || tag };
+      }
+
+      // Got task ID — poll for completion
+      const taskId = extractTaskId(data);
+      if (taskId) {
+        jobLog(jobId, `[${tag}] Task ID ${taskId} — polling...`);
+        const url = await pollTaskOne(jobId, tag, taskId);
+        if (url) return { audioUrl: url, taskId };
+        throw new Error(`${tag}: polling timed out`);
+      }
+
+      throw new Error(`${tag}: no audio URL or task ID in response`);
+
+    } catch (e) {
+      clearTimeout(timer);
+      if (e.name === 'AbortError') {
+        // Browser-side timeout — try list polling
+        jobLog(jobId, `[${tag}] Request aborted after ${TIMEOUT_MS/1000}s — polling list...`);
+        return await pollListForResult(jobId, tag, startedAt);
+      }
+      throw e;
+    }
+  }
+
+  // Poll anymusic.ai list endpoint looking for songs created after startedAt
+  async function pollListForResult(jobId, tag, startedAt) {
+    const DEADLINE  = Date.now() + 7 * 60 * 1000;  // 7 min max
+    const INTERVAL  = 8000;
+    let attempt     = 0;
+
+    while (Date.now() < DEADLINE) {
+      await sleep(INTERVAL);
+      attempt++;
+      try {
+        const r = await fetch(AM_LIST, { headers: _freshHeaders() });
+        if (!r.ok) { jobLog(jobId, `[${tag}] list ${r.status}`); continue; }
+        const d = await r.json();
+        jobLog(jobId, `[${tag}] list attempt ${attempt}: ` + JSON.stringify(d).slice(0, 200));
+
+        // Find the most recent song created after our request started
+        const songs = extractSongList(d);
+        const match = songs.find(s => {
+          const created = s.createdAt || s.created_at || s.createTime || 0;
+          const ts = typeof created === 'string' ? new Date(created).getTime() : Number(created) * 1000;
+          const url = s.audioUrl || s.audio_url || s.audio || s.url || s.fileUrl || s.mp3Url;
+          return url && ts >= startedAt - 5000; // 5s tolerance
+        });
+        if (match) {
+          const url = match.audioUrl || match.audio_url || match.audio || match.url || match.fileUrl || match.mp3Url;
+          jobLog(jobId, `[${tag}] Found in list: ` + url);
+          return { audioUrl: url, taskId: String(match.taskId || match.id || tag) };
+        }
+      } catch (e) {
+        jobLog(jobId, `[${tag}] list error: ` + e.message);
+      }
+    }
+    throw new Error(`${tag}: timed out waiting for result`);
+  }
+
+  function extractSongList(data) {
+    if (Array.isArray(data)) return data;
+    if (!data || typeof data !== 'object') return [];
+    for (const k of ['data','list','items','songs','result','music']) {
+      if (Array.isArray(data[k])) return data[k];
+    }
+    return [];
+  }
+
+  // Poll a specific task ID
+  async function pollTaskOne(jobId, tag, taskId) {
+    const DEADLINE  = Date.now() + 7 * 60 * 1000;
+    const INTERVAL  = 8000;
+    let attempt     = 0;
+
+    while (Date.now() < DEADLINE) {
+      await sleep(INTERVAL);
+      attempt++;
+      try {
+        const r = await fetch(AM_TASK(taskId), { headers: _freshHeaders() });
+        if (r.status === 404) { jobLog(jobId, `[${tag}] task 404, retry ${attempt}`); continue; }
+        const d = await r.json();
+        const result = parseTaskResult(d, taskId);
+        if (Array.isArray(result) && result.length > 0) return result[0];
+        if (result === null) throw new Error(`${tag}: task failed`);
+      } catch (e) {
+        jobLog(jobId, `[${tag}] poll error: ` + e.message);
+      }
+    }
+    return null;
   }
 
   // ── Generate button clicked ──
@@ -511,66 +644,51 @@
     addJobCard(jobId, label, meta);
 
     try {
-      jobLog(jobId, '[generate] Calling anymusic.ai from your browser...');
+      jobLog(jobId, '[generate] Sending 2 parallel requests to anymusic.ai...');
       setBadge(jobId, 'running');
       setStep(jobId, 'gen', 'active');
 
-      let payload;
-      if (apiMode === 'text-to-song') {
-        payload = { type: 'text-to-song', prompt, genre, quantity: 2, is_private: false };
-      } else {
-        payload = {
-          type: 'lyrics-to-song',
-          lyrics,
-          title,
+      // Build base payload — quantity:1 per request, 2 requests in parallel
+      // This avoids anymusic.ai's 30s Vercel timeout that triggers on quantity:2
+      const buildPayload = () => {
+        if (apiMode === 'text-to-song') {
+          return { type: 'text-to-song', prompt, genre, quantity: 1, is_private: false };
+        }
+        return {
+          type: 'lyrics-to-song', lyrics, title,
           styles: { style: [style], mood: [mood], scenario: [scenario] },
-          quantity: 2,
-          is_private: false,
+          quantity: 1, is_private: false,
         };
-      }
+      };
 
-      const resp = await fetch(AM_GENERATE, {
-        method: 'POST',
-        headers: _freshHeaders(),
-        body: JSON.stringify(payload),
-      });
+      // Fire both requests simultaneously, each independent
+      const [res1, res2] = await Promise.allSettled([
+        generateOne(jobId, 'v1', buildPayload()),
+        generateOne(jobId, 'v2', buildPayload()),
+      ]);
 
-      jobLog(jobId, `[generate] HTTP ${resp.status}`);
-
-      if (resp.status === 401 || resp.status === 403) {
-        throw new Error(`Server returned ${resp.status} — try pasting a real session cookie in Advanced settings.`);
-      }
-      if (!resp.ok) {
-        const txt = await resp.text();
-        throw new Error(`HTTP ${resp.status}: ${txt.slice(0, 200)}`);
-      }
-
-      const data = await resp.json();
-      jobLog(jobId, '[generate] Response: ' + JSON.stringify(data).slice(0, 300));
       setStep(jobId, 'gen', 'done');
 
-      // Check if audio URLs came back directly in the generate response (synchronous generation)
-      const directAudios = extractAllAudioUrls(data);
-      if (directAudios.length > 0) {
-        jobLog(jobId, `[generate] ${directAudios.length} variant(s) ready — saving to server...`);
-        setStep(jobId, 'poll', 'done');
-        setStep(jobId, 'done', 'done');
-        setBadge(jobId, 'ok');
-        showAudio(jobId, directAudios);
-        const taskId = extractTaskId(data) || jobId;
-        notifyServer(taskId, directAudios, jobId);
-        return;
+      const audioUrls = [];
+      const taskIds   = [];
+      for (const r of [res1, res2]) {
+        if (r.status === 'fulfilled' && r.value) {
+          audioUrls.push(r.value.audioUrl);
+          taskIds.push(r.value.taskId);
+        }
       }
 
-      // No immediate audio — fall back to polling
-      const taskId = extractTaskId(data);
-      if (!taskId) throw new Error('No task ID or audio in response: ' + JSON.stringify(data).slice(0, 200));
+      if (audioUrls.length === 0) {
+        throw new Error('Both generation requests failed — check logs above.');
+      }
 
-      jobLog(jobId, '[generate] Task ID: ' + taskId + ' — polling for completion...');
-      setStep(jobId, 'poll', 'active');
-      setBadge(jobId, 'running');
+      jobLog(jobId, `[generate] ${audioUrls.length}/2 variant(s) received — saving to server...`);
+      setStep(jobId, 'poll', 'done');
+      setStep(jobId, 'done', 'done');
+      setBadge(jobId, 'ok');
+      showAudio(jobId, audioUrls);
+      notifyServer(taskIds[0] || jobId, audioUrls, jobId);
 
-      await pollTask(jobId, taskId);
     } catch (err) {
       jobLog(jobId, '[error] ' + err.message);
       setBadge(jobId, 'failed');
@@ -613,46 +731,6 @@
       return null;
     };
     return search(data);
-  }
-
-  async function pollTask(jobId, taskId) {
-    const POLL_INTERVAL = 8000;
-    const TIMEOUT_MS    = 7 * 60 * 1000;
-    const deadline      = Date.now() + TIMEOUT_MS;
-    let attempt         = 0;
-
-    while (Date.now() < deadline) {
-      await sleep(POLL_INTERVAL);
-      attempt++;
-      try {
-        const r = await fetch(AM_TASK(taskId), { headers: _freshHeaders() });
-        if (r.status === 404) { jobLog(jobId, `[poll] attempt ${attempt}: 404 not found yet`); continue; }
-        const d = await r.json();
-        jobLog(jobId, `[poll] attempt ${attempt}: ` + JSON.stringify(d).slice(0, 250));
-
-        const result = parseTaskResult(d, taskId);
-        if (result === 'pending') continue;
-        if (result === 'failed') {
-          setBadge(jobId, 'failed');
-          setStep(jobId, 'done', 'failed');
-          jobLog(jobId, '[poll] Task failed on server side.');
-          return;
-        }
-        if (Array.isArray(result) && result.length > 0) {
-          setStep(jobId, 'poll', 'done');
-          setStep(jobId, 'done', 'done');
-          setBadge(jobId, 'ok');
-          showAudio(jobId, result);
-          notifyServer(taskId, result, jobId);
-          return;
-        }
-      } catch (e) {
-        jobLog(jobId, `[poll] attempt ${attempt} error: ${e.message}`);
-      }
-    }
-    setBadge(jobId, 'timeout');
-    setStep(jobId, 'done', 'failed');
-    jobLog(jobId, '[poll] Timed out after 7 minutes.');
   }
 
   function parseTaskResult(data, taskId) {
