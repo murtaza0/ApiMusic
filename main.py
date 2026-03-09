@@ -357,12 +357,31 @@ async def health():
     }
 
 
+@app.post("/test-generate")
+async def test_generate():
+    """
+    Smoke-test endpoint — returns 2 ready_ task_ids pointing to real public MP3s.
+    Use GET /status/{task_id} to stream each one.
+    No anymusic.ai call is made; useful for testing on Replit (IP blocked).
+    """
+    samples = [
+        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+    ]
+    variants = []
+    for url in samples:
+        encoded = base64.urlsafe_b64encode(url.encode()).decode().rstrip("=")
+        variants.append({"task_id": f"ready_{encoded}", "status": "ready"})
+    return {"ok": True, "test_mode": True, "variants": variants}
+
+
 @app.post("/generate")
 async def generate(req: GenerateRequest):
     """
     Fire 2 parallel generation requests (Variant 1 & 2) to anymusic.ai.
     Returns task_ids immediately — poll GET /status/{task_id} for each.
     """
+    t_start = time.time()
     profiles = random.sample(_PROFILES, 2)
 
     results = await asyncio.gather(
@@ -371,6 +390,7 @@ async def generate(req: GenerateRequest):
         return_exceptions=True,
     )
 
+    elapsed = round(time.time() - t_start, 2)
     variants = []
     for r in results:
         if isinstance(r, Exception):
@@ -382,7 +402,7 @@ async def generate(req: GenerateRequest):
         errors = "; ".join(v.get("error", "") for v in variants)
         raise HTTPException(status_code=500, detail=f"Both variants failed: {errors}")
 
-    return {"ok": True, "variants": variants}
+    return {"ok": True, "elapsed_seconds": elapsed, "variants": variants}
 
 
 @app.get("/status/{task_id:path}")
