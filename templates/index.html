@@ -329,12 +329,14 @@
         <textarea id="promptInput"
           placeholder="e.g. Upbeat electronic pop with dreamy synths and female vocals"></textarea>
 
-        <label for="genreSelect">Genre</label>
-        <select id="genreSelect">
+        <label for="genreInput">Genre <span style="font-size:11px;color:var(--muted);font-weight:400">(type anything — Pop, Qawwali, Punjabi, etc.)</span></label>
+        <input type="text" id="genreInput" list="genreList"
+          placeholder="e.g. Pop, R&amp;B, Qawwali, Punjabi Folk..." autocomplete="off" />
+        <datalist id="genreList">
           {% for g in genres %}
-          <option value="{{ g }}">{{ g }}</option>
+          <option value="{{ g }}">
           {% endfor %}
-        </select>
+        </datalist>
       </div>
 
       <!-- Custom mode -->
@@ -443,47 +445,15 @@
     document.getElementById('customFields').style.display = m === 'custom' ? 'block' : 'none';
   }
 
-  // ── Generate button clicked ──
-  async function onGenerate() {
-    const prompt = document.getElementById('promptInput').value.trim();
-    if (mode === 'simple' && !prompt) {
-      shake('promptInput'); return;
-    }
-    if (mode === 'custom' && !document.getElementById('lyricsInput').value.trim()) {
-      shake('lyricsInput'); return;
-    }
-
-    const body = {
-      mode,
-      prompt:   mode === 'simple' ? prompt : document.getElementById('promptInput').value.trim(),
-      genre:    document.getElementById('genreSelect').value,
-      title:    document.getElementById('titleInput').value.trim() || 'Untitled',
-      lyrics:   document.getElementById('lyricsInput').value.trim(),
-      style:    document.getElementById('styleSelect').value,
-      mood:     document.getElementById('moodSelect').value,
-      scenario: document.getElementById('scenarioSelect').value,
-    };
-
-    const btn = document.getElementById('generateBtn');
-    btn.disabled = true;
-    btn.textContent = 'Submitting...';
-
-    try {
-      const resp = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const data = await resp.json();
-      if (!resp.ok) { alert('Error: ' + (data.error || resp.statusText)); return; }
-      addJobCard(data.job_id, body);
-    } catch (err) {
-      alert('Request failed: ' + err.message);
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = '✨ Generate Song';
-    }
-  }
+  // ── anymusic.ai direct client-side API ──
+  // API calls go straight from the browser to anymusic.ai (uses user's residential IP).
+  // anymusic.ai returns Access-Control-Allow-Origin: * so CORS is not an issue.
+  const AM_GENERATE = 'https://anymusic.ai/api/music/generate';
+  const AM_TASK     = id => `https://anymusic.ai/api/music/task/${id}`;
+  const AM_HEADERS  = {
+    'Content-Type': 'application/json',
+    'Accept': '*/*',
+  };
 
   function shake(id) {
     const el = document.getElementById(id);
@@ -492,21 +462,182 @@
     setTimeout(() => el.style.borderColor = '', 1500);
   }
 
-  // ── Job card ──
-  function addJobCard(id, body) {
+  // ── Generate button clicked ──
+  async function onGenerate() {
+    const prompt = document.getElementById('promptInput').value.trim();
+    if (mode === 'simple' && !prompt) { shake('promptInput'); return; }
+    if (mode === 'custom' && !document.getElementById('lyricsInput').value.trim()) {
+      shake('lyricsInput'); return;
+    }
+
+    const genre   = document.getElementById('genreInput').value.trim() || 'Pop';
+    const title   = document.getElementById('titleInput').value.trim() || 'Untitled';
+    const lyrics  = document.getElementById('lyricsInput').value.trim();
+    const style   = document.getElementById('styleSelect').value;
+    const mood    = document.getElementById('moodSelect').value;
+    const scenario= document.getElementById('scenarioSelect').value;
+    const apiMode = mode === 'simple' ? 'text-to-song' : 'lyrics-to-song';
+
+    const btn = document.getElementById('generateBtn');
+    btn.disabled = true;
+    btn.textContent = 'Generating...';
+
+    const jobId = 'j' + Date.now();
+    const label = mode === 'custom' ? title : prompt.slice(0, 60);
+    const meta  = [mode, mode === 'simple' ? 'Genre: ' + genre : 'Style: ' + style, new Date().toLocaleTimeString()];
+    addJobCard(jobId, label, meta);
+
+    try {
+      jobLog(jobId, '[generate] Calling anymusic.ai from your browser...');
+      setBadge(jobId, 'running');
+      setStep(jobId, 'gen', 'active');
+
+      let payload;
+      if (apiMode === 'text-to-song') {
+        payload = { type: 'text-to-song', prompt, genre, quantity: 1, is_private: false };
+      } else {
+        payload = {
+          type: 'lyrics-to-song',
+          lyrics,
+          title,
+          styles: { style: [style], mood: [mood], scenario: [scenario] },
+          quantity: 1,
+          is_private: false,
+        };
+      }
+
+      const resp = await fetch(AM_GENERATE, {
+        method: 'POST',
+        headers: AM_HEADERS,
+        body: JSON.stringify(payload),
+      });
+
+      jobLog(jobId, `[generate] HTTP ${resp.status}`);
+
+      if (resp.status === 401 || resp.status === 403) {
+        throw new Error(`Server returned ${resp.status} — try pasting a real session cookie in Advanced settings.`);
+      }
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error(`HTTP ${resp.status}: ${txt.slice(0, 200)}`);
+      }
+
+      const data = await resp.json();
+      jobLog(jobId, '[generate] Response: ' + JSON.stringify(data).slice(0, 300));
+      setStep(jobId, 'gen', 'done');
+
+      const taskId = extractTaskId(data);
+      if (!taskId) throw new Error('No task ID in response: ' + JSON.stringify(data).slice(0, 200));
+
+      jobLog(jobId, '[generate] Task ID: ' + taskId);
+      setStep(jobId, 'poll', 'active');
+      setBadge(jobId, 'running');
+
+      await pollTask(jobId, taskId);
+    } catch (err) {
+      jobLog(jobId, '[error] ' + err.message);
+      setBadge(jobId, 'failed');
+      setStep(jobId, 'done', 'failed');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '✨ Generate Song';
+    }
+  }
+
+  function extractTaskId(data) {
+    const search = obj => {
+      if (!obj || typeof obj !== 'object') return null;
+      for (const k of ['taskId','task_id','id','jobId','job_id','musicId','requestId']) {
+        if (obj[k]) return String(obj[k]);
+      }
+      if (Array.isArray(obj)) return search(obj[0]);
+      if (obj.data) return search(obj.data);
+      return null;
+    };
+    return search(data);
+  }
+
+  async function pollTask(jobId, taskId) {
+    const POLL_INTERVAL = 8000;
+    const TIMEOUT_MS    = 7 * 60 * 1000;
+    const deadline      = Date.now() + TIMEOUT_MS;
+    let attempt         = 0;
+
+    while (Date.now() < deadline) {
+      await sleep(POLL_INTERVAL);
+      attempt++;
+      try {
+        const r = await fetch(AM_TASK(taskId), { headers: AM_HEADERS });
+        if (r.status === 404) { jobLog(jobId, `[poll] attempt ${attempt}: 404 not found yet`); continue; }
+        const d = await r.json();
+        jobLog(jobId, `[poll] attempt ${attempt}: ` + JSON.stringify(d).slice(0, 250));
+
+        const result = parseTaskResult(d, taskId);
+        if (result === 'pending') continue;
+        if (result === 'failed') {
+          setBadge(jobId, 'failed');
+          setStep(jobId, 'done', 'failed');
+          jobLog(jobId, '[poll] Task failed on server side.');
+          return;
+        }
+        if (typeof result === 'string') {
+          setStep(jobId, 'poll', 'done');
+          setStep(jobId, 'done', 'done');
+          setBadge(jobId, 'ok');
+          showAudio(jobId, result);
+          notifyServer(taskId, result);
+          return;
+        }
+      } catch (e) {
+        jobLog(jobId, `[poll] attempt ${attempt} error: ${e.message}`);
+      }
+    }
+    setBadge(jobId, 'timeout');
+    setStep(jobId, 'done', 'failed');
+    jobLog(jobId, '[poll] Timed out after 7 minutes.');
+  }
+
+  function parseTaskResult(data, taskId) {
+    const records = [];
+    if (Array.isArray(data)) records.push(...data);
+    else if (data && typeof data === 'object') {
+      const inner = data.data || data.result || data.task || data.song || data.music;
+      if (Array.isArray(inner)) records.push(...inner);
+      else if (inner && typeof inner === 'object') records.push(inner);
+      else records.push(data);
+    }
+    for (const rec of records) {
+      if (!rec || typeof rec !== 'object') continue;
+      const recId = String(rec.taskId || rec.task_id || rec.id || '');
+      if (taskId && recId && recId !== taskId) continue;
+      const status = (rec.status || rec.state || rec.taskStatus || '').toLowerCase();
+      if (['success','finished','complete','completed','done','succeeded'].includes(status)) {
+        const url = rec.audioUrl || rec.audio_url || rec.audio || rec.url || rec.fileUrl || rec.mp3Url;
+        if (url && typeof url === 'string' && url.startsWith('http')) return url;
+        return 'pending';
+      }
+      if (['error','failed','failure','cancelled','canceled'].includes(status)) return 'failed';
+    }
+    return 'pending';
+  }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  async function notifyServer(taskId, audioUrl) {
+    try {
+      await fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: taskId, audio_url: audioUrl }),
+      });
+    } catch (_) {}
+  }
+
+  // ── Job card helpers ──
+  function addJobCard(id, label, meta) {
     const wrap = document.getElementById('jobsWrap');
     const empty = wrap.querySelector('.jobs-empty');
     if (empty) empty.remove();
-
-    const label = body.mode === 'custom'
-      ? (body.title || 'Custom Song')
-      : body.prompt.slice(0, 60);
-
-    const metaParts = [
-      'Mode: ' + body.mode,
-      body.mode === 'simple' ? 'Genre: ' + body.genre : 'Style: ' + body.style,
-      new Date().toLocaleTimeString(),
-    ];
 
     const el = document.createElement('div');
     el.className = 'job-item';
@@ -515,7 +646,7 @@
       <div class="job-header">
         <div>
           <div class="job-title">${esc(label)}</div>
-          <div class="job-meta">${metaParts.map(esc).join(' &nbsp;·&nbsp; ')}</div>
+          <div class="job-meta">${meta.map(esc).join(' &nbsp;·&nbsp; ')}</div>
         </div>
         <span class="status-badge badge-queued" id="badge-${id}">Queued</span>
       </div>
@@ -528,85 +659,47 @@
       <div id="result-${id}"></div>
     `;
     wrap.insertBefore(el, wrap.firstChild);
-    startPolling(id);
   }
 
-  // ── Polling ──
-  function startPolling(id) {
-    const timer = setInterval(async () => {
-      try {
-        const resp = await fetch('/api/status/' + id);
-        const data = await resp.json();
-        updateCard(id, data);
-        if (['ok', 'failed', 'error', 'timeout'].includes(data.status)) {
-          clearInterval(timer);
-        }
-      } catch (_) {}
-    }, 2000);
+  function jobLog(id, line) {
+    const el = document.getElementById('log-' + id);
+    if (!el) return;
+    const d = document.createElement('div');
+    let cls = 'log-line';
+    const l = line.toLowerCase();
+    if (l.includes('[generate]')) cls += ' log-gen';
+    if (l.includes('[poll]'))     cls += ' log-poll';
+    if (l.includes('ready') || l.includes('audio'))  cls += ' log-ok';
+    if (l.includes('[error]') || l.includes('fail') || l.includes('403') || l.includes('401')) cls += ' log-error';
+    d.className = cls;
+    d.textContent = line;
+    el.appendChild(d);
+    el.scrollTop = el.scrollHeight;
   }
 
-  function updateCard(id, data) {
-    const el     = document.getElementById('job-' + id);
-    const badge  = document.getElementById('badge-' + id);
-    const logEl  = document.getElementById('log-' + id);
-    const resEl  = document.getElementById('result-' + id);
-    const stepG  = document.getElementById('step-gen-' + id);
-    const stepP  = document.getElementById('step-poll-' + id);
-    const stepD  = document.getElementById('step-done-' + id);
+  function setBadge(id, status) {
+    const b = document.getElementById('badge-' + id);
+    const j = document.getElementById('job-' + id);
+    if (b) { b.className = 'status-badge badge-' + status; b.textContent = cap(status); }
+    if (j) j.className = 'job-item status-' + status;
+  }
 
-    if (badge) {
-      badge.className = 'status-badge badge-' + data.status;
-      badge.textContent = cap(data.status);
-    }
-    if (el) el.className = 'job-item status-' + data.status;
+  function setStep(id, step, state) {
+    const el = document.getElementById(`step-${step}-${id}`);
+    if (el) el.className = 'step-pill' + (state ? ' ' + state : '');
+  }
 
-    const logsText = (data.logs || []).join('\n').toLowerCase();
-    const genDone  = logsText.includes('[generate]') && logsText.includes('response status');
-    const polling  = logsText.includes('[poll]');
-    const final    = data.status === 'ok';
-    const failed   = ['failed','error','timeout'].includes(data.status);
-
-    if (stepG) stepG.className = 'step-pill' + (genDone ? ' done' : data.status === 'running' ? ' active' : '');
-    if (stepP) stepP.className = 'step-pill' + (final ? ' done' : polling ? ' active' : '');
-    if (stepD) stepD.className = 'step-pill' + (final ? ' done' : failed ? ' failed' : '');
-
-    if (logEl && data.logs) {
-      logEl.innerHTML = data.logs.map(line => {
-        let cls = 'log-line';
-        const l = line.toLowerCase();
-        if (l.includes('[generate]')) cls += ' log-gen';
-        if (l.includes('[poll]'))     cls += ' log-poll';
-        if (l.includes('[run_job]'))  cls += ' log-poll';
-        if (l.includes('ready') || l.includes('audio url'))  cls += ' log-ok';
-        if (l.includes('fail') || l.includes('error') || l.includes('403') || l.includes('401')) cls += ' log-error';
-        return `<div class="${cls}">${esc(line)}</div>`;
-      }).join('');
-      logEl.scrollTop = logEl.scrollHeight;
-    }
-
-    if (data.status === 'ok' && data.audio_url && resEl && !resEl.hasChildNodes()) {
-      const localLine = data.local_path
-        ? `<div style="font-size:11px;color:var(--muted);margin-top:6px;">Saved: ${esc(data.local_path)}</div>`
-        : '';
-      resEl.innerHTML = `
-        <div class="audio-wrap">
-          <div class="ready-label">✓ Song ready!</div>
-          <audio controls src="${esc(data.audio_url)}"></audio>
-          <br/>
-          <a class="audio-url" href="${esc(data.audio_url)}" target="_blank" rel="noopener">
-            ${esc(data.audio_url)}
-          </a>
-          ${localLine}
-        </div>`;
-    }
-
-    if (data.error && logEl && !logEl.querySelector('.err-final')) {
-      const d = document.createElement('div');
-      d.className = 'log-line log-error err-final';
-      d.textContent = 'Error: ' + data.error;
-      logEl.appendChild(d);
-      logEl.scrollTop = logEl.scrollHeight;
-    }
+  function showAudio(id, url) {
+    const resEl = document.getElementById('result-' + id);
+    if (!resEl || resEl.hasChildNodes()) return;
+    resEl.innerHTML = `
+      <div class="audio-wrap">
+        <div class="ready-label">✓ Song ready!</div>
+        <audio controls src="${esc(url)}"></audio>
+        <br/>
+        <a class="audio-url" href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>
+      </div>`;
+    jobLog(id, '[ready] Audio URL: ' + url);
   }
 
   function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }

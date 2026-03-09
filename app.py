@@ -134,6 +134,28 @@ def api_status(job_id: str):
     return jsonify(job)
 
 
+@app.route("/api/notify", methods=["POST"])
+def api_notify():
+    """
+    Called by the browser when client-side generation completes.
+    Stores the audio URL so it can optionally be downloaded server-side.
+    """
+    data     = request.get_json(force=True)
+    task_id  = (data.get("task_id") or "").strip()
+    audio_url = (data.get("audio_url") or "").strip()
+
+    if audio_url:
+        import threading as _t
+        def _download():
+            import re as _re, time as _time
+            safe = _re.sub(r"[^a-z0-9]+", "_", task_id[:20].lower()) if task_id else "track"
+            fn   = f"{safe}_{int(_time.time())}.mp3"
+            bot_core.download_audio(audio_url, filename=fn)
+        _t.Thread(target=_download, daemon=True).start()
+
+    return jsonify({"ok": True})
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------

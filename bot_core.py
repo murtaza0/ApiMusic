@@ -15,8 +15,14 @@ import re
 import time
 import random
 import string
-import requests
 from typing import Callable, Optional
+
+try:
+    from curl_cffi import requests as cf_requests
+    _CURL_AVAILABLE = True
+except ImportError:
+    import requests as cf_requests
+    _CURL_AVAILABLE = False
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -38,11 +44,11 @@ BASE_HEADERS = {
     "User-Agent":   (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/122.0.0.0 Safari/537.36"
+        "Chrome/131.0.0.0 Safari/537.36"
     ),
     "Accept":             "*/*",
     "Accept-Language":    "en-US,en;q=0.9",
-    "sec-ch-ua":          '"Not:A-Brand";v="99", "Google Chrome";v="122", "Chromium";v="122"',
+    "sec-ch-ua":          '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
     "sec-ch-ua-mobile":   "?0",
     "sec-ch-ua-platform": '"Windows"',
     "Sec-Fetch-Dest":     "empty",
@@ -220,7 +226,8 @@ def download_audio(
 
     try:
         log(f"[download] Downloading: {audio_url}")
-        resp = requests.get(audio_url, timeout=60, stream=True)
+        impersonate_opts = {"impersonate": "chrome131"} if _CURL_AVAILABLE else {}
+        resp = cf_requests.get(audio_url, timeout=60, stream=True, **impersonate_opts)
         resp.raise_for_status()
 
         with open(out_path, "wb") as f:
@@ -281,13 +288,18 @@ def start_generation(
         }
 
     log(f"[generate] POST {GENERATE_URL}  mode={mode}")
+    log(f"[generate] Using {'curl_cffi Chrome impersonation' if _CURL_AVAILABLE else 'requests (fallback)'}")
     try:
-        resp = requests.post(GENERATE_URL, json=payload, headers=headers, timeout=60)
-    except requests.Timeout:
-        log("[generate] Request timed out.")
-        return None
-    except requests.RequestException as exc:
-        log(f"[generate] Network error: {exc}")
+        impersonate_opts = {"impersonate": "chrome131"} if _CURL_AVAILABLE else {}
+        resp = cf_requests.post(
+            GENERATE_URL, json=payload, headers=headers, timeout=60,
+            **impersonate_opts
+        )
+    except Exception as exc:
+        if "timed out" in str(exc).lower() or "timeout" in str(exc).lower():
+            log("[generate] Request timed out.")
+        else:
+            log(f"[generate] Network error: {exc}")
         return None
 
     log(f"[generate] Status: {resp.status_code}")
@@ -394,7 +406,8 @@ def poll_task_status(
 
         for url in (urls_to_try if working_url is None else [working_url]):
             try:
-                resp = requests.get(url, headers=headers, timeout=30)
+                impersonate_opts = {"impersonate": "chrome131"} if _CURL_AVAILABLE else {}
+                resp = cf_requests.get(url, headers=headers, timeout=30, **impersonate_opts)
                 if resp.status_code == 404:
                     continue
                 resp.raise_for_status()
