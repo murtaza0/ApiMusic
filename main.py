@@ -532,8 +532,10 @@ async def status(task_id: str):
 
 
 # ─────────────────────────────────────────────
-#  Dev entry point (Replit only)
+#  Entry point — works on Replit, Railway, Render
 # ─────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=5000, reload=True)
+    port = int(os.getenv("PORT", 5000))
+    reload = os.getenv("RAILWAY_ENVIRONMENT") is None  # no reload on Railway
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=reload)
