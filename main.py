@@ -251,6 +251,12 @@ async def _generate_one(req: GenerateRequest, profile: dict) -> dict:
                 timeout=90,
             )
         status_code = resp.status_code
+        if status_code in (401, 403):
+            raise Exception(f"Auth / IP blocked ({status_code}): {resp.text[:200]}")
+        if status_code == 429:
+            raise Exception("Rate limited by anymusic.ai")
+        if status_code not in (200, 201):
+            raise Exception(f"HTTP {status_code}: {resp.text[:200]}")
         try:
             data = resp.json()
         except Exception:
@@ -259,16 +265,16 @@ async def _generate_one(req: GenerateRequest, profile: dict) -> dict:
         async with httpx.AsyncClient(timeout=90.0) as client:
             resp = await client.post(GENERATE_URL, json=payload, headers=headers)
         status_code = resp.status_code
+        if status_code in (401, 403):
+            raise Exception(f"Auth / IP blocked ({status_code}): {resp.text[:200]}")
+        if status_code == 429:
+            raise Exception("Rate limited by anymusic.ai")
         if status_code not in (200, 201):
             raise Exception(f"HTTP {status_code}: {resp.text[:200]}")
-        data = resp.json()
-
-    if status_code in (401, 403):
-        raise Exception(f"Auth error: {status_code}")
-    if status_code == 429:
-        raise Exception("Rate limited by anymusic.ai")
-    if status_code not in (200, 201):
-        raise Exception(f"HTTP {status_code}")
+        try:
+            data = resp.json()
+        except Exception:
+            raise Exception(f"Non-JSON response (HTTP {status_code}): {resp.text[:200]}")
 
     # Case 1: audio URL returned directly (synchronous generation)
     audio_url = _extract_audio_url(data)
@@ -298,6 +304,11 @@ async def _stream_audio_url(audio_url: str) -> StreamingResponse:
                 impersonate="chrome131",
                 timeout=30,
             )
+        if resp.status_code not in (200, 206):
+            raise HTTPException(
+                status_code=502,
+                detail=f"CDN returned HTTP {resp.status_code} for audio URL",
+            )
         content = resp.content
     else:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -305,10 +316,17 @@ async def _stream_audio_url(audio_url: str) -> StreamingResponse:
         resp.raise_for_status()
         content = resp.content
 
+    if not content:
+        raise HTTPException(status_code=502, detail="CDN returned empty audio content")
+
     return StreamingResponse(
         iter([content]),
         media_type="audio/mpeg",
-        headers={"Content-Disposition": 'attachment; filename="track.mp3"'},
+        headers={
+            "Content-Disposition": 'attachment; filename="track.mp3"',
+            "Content-Length":      str(len(content)),
+            "Accept-Ranges":       "bytes",
+        },
     )
 
 
@@ -403,6 +421,8 @@ async def status(task_id: str):
                     timeout=15,
                 )
             poll_status = resp.status_code
+            if poll_status == 404:
+                return JSONResponse({"status": "pending", "task_id": task_id})
             try:
                 data = resp.json()
             except Exception:
@@ -413,7 +433,10 @@ async def status(task_id: str):
             poll_status = resp.status_code
             if poll_status == 404:
                 return JSONResponse({"status": "pending", "task_id": task_id})
-            data = resp.json()
+            try:
+                data = resp.json()
+            except Exception:
+                return JSONResponse({"status": "pending", "task_id": task_id})
 
         # Audio URL present → stream it
         audio_url = _extract_audio_url(data)
@@ -424,9 +447,18 @@ async def status(task_id: str):
         st = _status_from_record(data)
         if st == "failed":
             return JSONResponse({"status": "failed", "task_id": task_id})
+        if st == "success":
+            # Task says success but no audio URL found — treat as failed so client doesn't loop forever
+            return JSONResponse({
+                "status": "failed",
+                "task_id": task_id,
+                "error": "Task completed but no audio URL in response",
+            })
 
         return JSONResponse({"status": "pending", "task_id": task_id})
 
+    except HTTPException:
+        raise
     except Exception as exc:
         return JSONResponse(
             {"status": "pending", "task_id": task_id, "error": str(exc)}
