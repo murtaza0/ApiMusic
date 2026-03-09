@@ -248,13 +248,21 @@
     .log-ok     { color: var(--green); font-weight: 600; }
     .log-error  { color: var(--red); }
 
-    .audio-wrap {
-      margin-top: 14px; background: #0a160a;
-      border: 1px solid #1a3a1a; border-radius: 8px; padding: 14px;
-    }
-    .audio-wrap .ready-label {
+    .variants-ready {
       font-size: 13px; color: var(--green); font-weight: 600;
-      margin-bottom: 10px;
+      margin-top: 14px; margin-bottom: 10px;
+    }
+    .variant-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;
+    }
+    @media (max-width: 600px) { .variant-grid { grid-template-columns: 1fr; } }
+    .audio-wrap {
+      background: #0a160a; border: 1px solid #1a3a1a;
+      border-radius: 8px; padding: 14px;
+    }
+    .audio-wrap .variant-label {
+      font-size: 11px; font-weight: 700; letter-spacing: .05em;
+      color: var(--muted); text-transform: uppercase; margin-bottom: 8px;
     }
     audio { width: 100%; border-radius: 6px; margin-top: 6px; }
     .audio-url {
@@ -509,14 +517,14 @@
 
       let payload;
       if (apiMode === 'text-to-song') {
-        payload = { type: 'text-to-song', prompt, genre, quantity: 1, is_private: false };
+        payload = { type: 'text-to-song', prompt, genre, quantity: 2, is_private: false };
       } else {
         payload = {
           type: 'lyrics-to-song',
           lyrics,
           title,
           styles: { style: [style], mood: [mood], scenario: [scenario] },
-          quantity: 1,
+          quantity: 2,
           is_private: false,
         };
       }
@@ -541,18 +549,16 @@
       jobLog(jobId, '[generate] Response: ' + JSON.stringify(data).slice(0, 300));
       setStep(jobId, 'gen', 'done');
 
-      // Check if audio URL came back directly in the generate response (synchronous generation)
-      const directAudio = extractAudioUrl(data);
-      if (directAudio) {
-        jobLog(jobId, '[generate] Audio ready — downloading to server...');
+      // Check if audio URLs came back directly in the generate response (synchronous generation)
+      const directAudios = extractAllAudioUrls(data);
+      if (directAudios.length > 0) {
+        jobLog(jobId, `[generate] ${directAudios.length} variant(s) ready — saving to server...`);
         setStep(jobId, 'poll', 'done');
         setStep(jobId, 'done', 'done');
         setBadge(jobId, 'ok');
-        // Show CDN URL immediately so user doesn't wait
-        showAudio(jobId, directAudio);
-        // Then swap to local server URL once backend download finishes
+        showAudio(jobId, directAudios);
         const taskId = extractTaskId(data) || jobId;
-        notifyServer(taskId, directAudio, jobId);
+        notifyServer(taskId, directAudios, jobId);
         return;
       }
 
@@ -575,17 +581,25 @@
     }
   }
 
-  function extractAudioUrl(data) {
-    const search = obj => {
-      if (!obj || typeof obj !== 'object') return null;
-      for (const k of ['audio_url','audioUrl','audio','mp3_url','mp3Url','file_url','fileUrl','url']) {
-        if (obj[k] && typeof obj[k] === 'string' && obj[k].startsWith('http')) return obj[k];
+  function extractAllAudioUrls(data) {
+    const KEYS = ['audio_url','audioUrl','audio','mp3_url','mp3Url','file_url','fileUrl','url'];
+    const found = [];
+    const collect = obj => {
+      if (!obj || typeof obj !== 'object') return;
+      // If it has an audio key directly, grab it
+      for (const k of KEYS) {
+        if (obj[k] && typeof obj[k] === 'string' && obj[k].startsWith('http')) {
+          if (!found.includes(obj[k])) found.push(obj[k]);
+        }
       }
-      if (Array.isArray(obj)) return search(obj[0]);
-      if (obj.data) return search(obj.data);
-      return null;
+      // Recurse into data / result / songs arrays
+      if (Array.isArray(obj)) { obj.forEach(collect); return; }
+      for (const k of ['data','result','songs','music','items','list']) {
+        if (obj[k]) collect(obj[k]);
+      }
     };
-    return search(data);
+    collect(data);
+    return found;
   }
 
   function extractTaskId(data) {
@@ -624,7 +638,7 @@
           jobLog(jobId, '[poll] Task failed on server side.');
           return;
         }
-        if (typeof result === 'string') {
+        if (Array.isArray(result) && result.length > 0) {
           setStep(jobId, 'poll', 'done');
           setStep(jobId, 'done', 'done');
           setBadge(jobId, 'ok');
@@ -645,60 +659,77 @@
     const records = [];
     if (Array.isArray(data)) records.push(...data);
     else if (data && typeof data === 'object') {
-      const inner = data.data || data.result || data.task || data.song || data.music;
+      const inner = data.data || data.result || data.task || data.song || data.music || data.songs || data.list;
       if (Array.isArray(inner)) records.push(...inner);
       else if (inner && typeof inner === 'object') records.push(inner);
       else records.push(data);
     }
+    const urls = [];
+    let anyPending = false;
     for (const rec of records) {
       if (!rec || typeof rec !== 'object') continue;
-      const recId = String(rec.taskId || rec.task_id || rec.id || '');
-      if (taskId && recId && recId !== taskId) continue;
       const status = (rec.status || rec.state || rec.taskStatus || '').toLowerCase();
       if (['success','finished','complete','completed','done','succeeded'].includes(status)) {
         const url = rec.audioUrl || rec.audio_url || rec.audio || rec.url || rec.fileUrl || rec.mp3Url;
-        if (url && typeof url === 'string' && url.startsWith('http')) return url;
-        return 'pending';
+        if (url && typeof url === 'string' && url.startsWith('http')) urls.push(url);
+        else anyPending = true;
+      } else if (['error','failed','failure','cancelled','canceled'].includes(status)) {
+        // skip failed variants
+      } else {
+        anyPending = true;
       }
-      if (['error','failed','failure','cancelled','canceled'].includes(status)) return 'failed';
     }
+    if (urls.length > 0) return urls;
+    if (anyPending) return 'pending';
     return 'pending';
   }
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-  async function notifyServer(taskId, audioUrl, jobId) {
-    try {
-      jobLog(jobId, '[server] Saving MP3 to server...');
-      const r = await fetch('/api/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task_id: taskId, audio_url: audioUrl }),
-      });
-      const d = await r.json();
-      if (d.ok && d.local_url) {
-        jobLog(jobId, '[server] Saved: ' + d.local_url);
-        // Swap audio player to local server URL
-        swapAudioSrc(jobId, d.local_url);
-      } else {
-        jobLog(jobId, '[server] Using CDN URL (server download failed)');
+  async function notifyServer(taskId, audioUrls, jobId) {
+    // audioUrls is always an array
+    const urls = Array.isArray(audioUrls) ? audioUrls : [audioUrls];
+    const localUrls = [];
+    for (let i = 0; i < urls.length; i++) {
+      try {
+        jobLog(jobId, `[server] Saving variant ${i+1}/${urls.length}...`);
+        const r = await fetch('/api/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ task_id: taskId + '_v' + (i+1), audio_url: urls[i] }),
+        });
+        const d = await r.json();
+        if (d.ok && d.local_url) {
+          jobLog(jobId, `[server] Variant ${i+1} saved: ` + d.local_url);
+          localUrls.push(d.local_url);
+        } else {
+          jobLog(jobId, `[server] Variant ${i+1}: using CDN URL`);
+          localUrls.push(null);
+        }
+      } catch (e) {
+        jobLog(jobId, `[server] Variant ${i+1} error: ` + e.message);
+        localUrls.push(null);
       }
-    } catch (e) {
-      jobLog(jobId, '[server] Could not save to server: ' + e.message);
     }
+    // Swap players to local URLs where available
+    swapAudioSrcs(jobId, localUrls);
   }
 
-  function swapAudioSrc(jobId, localUrl) {
+  function swapAudioSrcs(jobId, localUrls) {
     const resEl = document.getElementById('result-' + jobId);
     if (!resEl) return;
-    const audio = resEl.querySelector('audio');
-    const link  = resEl.querySelector('a.audio-url');
-    if (audio) audio.src = localUrl;
-    if (link)  { link.href = localUrl; link.textContent = localUrl; }
-    const saved = document.createElement('div');
-    saved.style.cssText = 'font-size:11px;color:var(--muted);margin-top:6px;';
-    saved.textContent = '✓ Saved on server: ' + localUrl;
-    resEl.querySelector('.audio-wrap')?.appendChild(saved);
+    const wraps = resEl.querySelectorAll('.audio-wrap');
+    localUrls.forEach((localUrl, i) => {
+      if (!localUrl || !wraps[i]) return;
+      const audio = wraps[i].querySelector('audio');
+      const link  = wraps[i].querySelector('a.audio-url');
+      if (audio) audio.src = localUrl;
+      if (link)  { link.href = localUrl; link.textContent = localUrl; }
+      const saved = document.createElement('div');
+      saved.style.cssText = 'font-size:10px;color:var(--muted);margin-top:4px;';
+      saved.textContent = '✓ Saved: ' + localUrl;
+      wraps[i].appendChild(saved);
+    });
   }
 
   // ── Job card helpers ──
@@ -757,17 +788,20 @@
     if (el) el.className = 'step-pill' + (state ? ' ' + state : '');
   }
 
-  function showAudio(id, url) {
+  function showAudio(id, urls) {
     const resEl = document.getElementById('result-' + id);
     if (!resEl || resEl.hasChildNodes()) return;
-    resEl.innerHTML = `
+    const arr = Array.isArray(urls) ? urls : [urls];
+    const variantCards = arr.map((url, i) => `
       <div class="audio-wrap">
-        <div class="ready-label">✓ Song ready!</div>
+        <div class="variant-label">Variant ${i + 1}</div>
         <audio controls src="${esc(url)}"></audio>
-        <br/>
         <a class="audio-url" href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>
-      </div>`;
-    jobLog(id, '[ready] Audio URL: ' + url);
+      </div>`).join('');
+    resEl.innerHTML = `
+      <div class="variants-ready">✓ ${arr.length} variant${arr.length > 1 ? 's' : ''} ready!</div>
+      <div class="variant-grid">${variantCards}</div>`;
+    arr.forEach((url, i) => jobLog(id, `[ready] Variant ${i+1}: ` + url));
   }
 
   function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
