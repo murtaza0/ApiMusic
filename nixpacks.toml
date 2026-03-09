@@ -1,0 +1,14 @@
+[phases.setup]
+nixPkgs = [
+  "chromium",
+  "chromedriver",
+  "xvfb-run",
+]
+
+[phases.install]
+cmds = [
+  "pip install -r requirements.txt",
+]
+
+[start]
+cmd = "uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1"
