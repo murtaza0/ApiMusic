@@ -462,12 +462,11 @@
   function _randHex(n) { return [...Array(n)].map(() => Math.floor(Math.random()*16).toString(16)).join(''); }
 
   function _freshHeaders() {
+    // Only include headers allowed by anymusic.ai CORS (access-control-allow-headers: Content-Type, Authorization)
+    // Extra headers like X-Request-ID trigger CORS preflight rejection → "Failed to fetch"
     return {
-      'Content-Type':   'application/json',
-      'Accept':         '*/*',
-      'Accept-Language': _randEl(_ACCEPT_LANGS),
-      'X-Request-ID':   _randHex(16),
-      'Cache-Control':  'no-cache',
+      'Content-Type': 'application/json',
+      'Accept':       '*/*',
     };
   }
 
