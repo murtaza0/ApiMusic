@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.pyo
+music_outputs/
+.pythonlibs/
+.upm/
+.cache/
+.config/

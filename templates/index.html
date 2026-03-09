@@ -718,18 +718,25 @@
   function swapAudioSrcs(jobId, localUrls) {
     const resEl = document.getElementById('result-' + jobId);
     if (!resEl) return;
-    const wraps = resEl.querySelectorAll('.audio-wrap');
+    let allDone = true;
     localUrls.forEach((localUrl, i) => {
-      if (!localUrl || !wraps[i]) return;
-      const audio = wraps[i].querySelector('audio');
-      const link  = wraps[i].querySelector('a.audio-url');
-      if (audio) audio.src = localUrl;
-      if (link)  { link.href = localUrl; link.textContent = localUrl; }
-      const saved = document.createElement('div');
-      saved.style.cssText = 'font-size:10px;color:var(--muted);margin-top:4px;';
-      saved.textContent = '✓ Saved: ' + localUrl;
-      wraps[i].appendChild(saved);
+      const wrap = document.getElementById(`variant-wrap-${jobId}-${i}`);
+      if (!wrap) return;
+      if (!localUrl) {
+        wrap.querySelector('.saving-indicator').textContent = '✗ Save failed — try again';
+        allDone = false;
+        return;
+      }
+      // Replace placeholder with real audio player
+      wrap.innerHTML = `
+        <div class="variant-label">Variant ${i + 1}</div>
+        <audio controls src="${esc(localUrl)}"></audio>
+        <a class="audio-url" href="${esc(localUrl)}" download>⬇ Download Variant ${i + 1}</a>`;
     });
+    if (allDone) {
+      const hdr = resEl.querySelector('.variants-ready');
+      if (hdr) hdr.textContent = `✓ ${localUrls.length} variant${localUrls.length > 1 ? 's' : ''} ready!`;
+    }
   }
 
   // ── Job card helpers ──
@@ -792,16 +799,18 @@
     const resEl = document.getElementById('result-' + id);
     if (!resEl || resEl.hasChildNodes()) return;
     const arr = Array.isArray(urls) ? urls : [urls];
-    const variantCards = arr.map((url, i) => `
-      <div class="audio-wrap">
+    // Show placeholder cards while server saves the files
+    const variantCards = arr.map((_, i) => `
+      <div class="audio-wrap" id="variant-wrap-${id}-${i}">
         <div class="variant-label">Variant ${i + 1}</div>
-        <audio controls src="${esc(url)}"></audio>
-        <a class="audio-url" href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>
+        <div class="saving-indicator" style="color:var(--muted);font-size:12px;padding:10px 0;">
+          ⏳ Saving to server...
+        </div>
       </div>`).join('');
     resEl.innerHTML = `
-      <div class="variants-ready">✓ ${arr.length} variant${arr.length > 1 ? 's' : ''} ready!</div>
+      <div class="variants-ready">✓ ${arr.length} variant${arr.length > 1 ? 's' : ''} — saving to server...</div>
       <div class="variant-grid">${variantCards}</div>`;
-    arr.forEach((url, i) => jobLog(id, `[ready] Variant ${i+1}: ` + url));
+    arr.forEach((_, i) => jobLog(id, `[ready] Variant ${i+1} received — saving...`));
   }
 
   function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }

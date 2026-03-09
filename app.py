@@ -234,22 +234,19 @@ def _v1_run_job_thread(job_id: str, params: dict) -> None:
         )
 
         variants = []
-        for v in result.get("variants", []):
+        for i, v in enumerate(result.get("variants", [])):
             local_path = v.get("local_path")
-            local_url  = f"/audio/{os.path.basename(local_path)}" if local_path else None
+            filename   = os.path.basename(local_path) if local_path else None
             variants.append({
-                "cdn_url":   v.get("cdn_url"),
-                "local_url": local_url,
+                "index":      i + 1,
+                "filename":   filename,
+                "local_path": local_path,
+                "download_url": f"/v1/download/{job_id}/{i + 1}" if filename else None,
             })
 
         with _jobs_lock:
             _jobs[job_id]["status"]   = result["status"]
             _jobs[job_id]["variants"] = variants
-            _jobs[job_id]["audio_url"] = result.get("audio_url")
-            _jobs[job_id]["local_url"] = (
-                f"/audio/{os.path.basename(result['local_path'])}"
-                if result.get("local_path") else None
-            )
 
     except Exception as exc:
         with _jobs_lock:
@@ -342,13 +339,14 @@ def v1_generate():
 def v1_job_status(job_id: str):
     """
     GET /v1/jobs/<job_id>
-    Poll job status. Keep calling until status is "ok", "failed", "timeout", or "error".
+    Poll until done=true. Each variant has a download_url for the actual MP3 file.
 
     Response fields:
-      status     string    "queued" | "running" | "ok" | "failed" | "timeout" | "error"
-      variants   array     [{ "cdn_url": "...", "local_url": "/audio/..." }, ...]
-      logs       array     Generation log lines
-      error      string    Error message (only on failure)
+      status        "queued" | "running" | "ok" | "failed" | "timeout" | "error"
+      done          true when generation is complete
+      variants      [{ "index": 1, "filename": "...", "download_url": "/v1/download/..." }, ...]
+      logs          generation log lines
+      error         error message (only on failure)
     """
     with _jobs_lock:
         job = _jobs.get(job_id)
@@ -356,15 +354,60 @@ def v1_job_status(job_id: str):
         return jsonify({"ok": False, "error": "job not found"}), 404
 
     done = job["status"] in ("ok", "failed", "timeout", "error")
+
+    # Strip local_path from response — expose only the download_url
+    variants = [
+        {
+            "index":        v.get("index"),
+            "filename":     v.get("filename"),
+            "download_url": v.get("download_url"),
+        }
+        for v in job.get("variants", [])
+    ]
+
     return jsonify({
         "ok":       True,
         "job_id":   job_id,
         "status":   job["status"],
         "done":     done,
-        "variants": job.get("variants", []),
+        "variants": variants,
         "logs":     job.get("logs", []),
         "error":    job.get("error"),
     })
+
+
+@app.route("/v1/download/<job_id>/<int:variant_n>")
+@_require_api_key
+def v1_download(job_id: str, variant_n: int):
+    """
+    GET /v1/download/<job_id>/<variant_n>
+    Stream the generated MP3 audio file directly (Content-Type: audio/mpeg).
+    variant_n is 1-based (1 = first variant, 2 = second, etc.)
+    """
+    with _jobs_lock:
+        job = _jobs.get(job_id)
+    if job is None:
+        return jsonify({"ok": False, "error": "job not found"}), 404
+    if job["status"] != "ok":
+        return jsonify({"ok": False, "error": f"job not ready (status: {job['status']})"}), 409
+
+    variants = job.get("variants", [])
+    # Find variant by index
+    variant = next((v for v in variants if v.get("index") == variant_n), None)
+    if not variant or not variant.get("local_path"):
+        return jsonify({"ok": False, "error": f"variant {variant_n} not found"}), 404
+
+    local_path = variant["local_path"]
+    if not os.path.exists(local_path):
+        return jsonify({"ok": False, "error": "audio file missing on server"}), 404
+
+    return send_from_directory(
+        os.path.abspath(bot_core.OUTPUT_DIR),
+        os.path.basename(local_path),
+        mimetype="audio/mpeg",
+        as_attachment=True,
+        download_name=variant.get("filename", "song.mp3"),
+    )
 
 
 # ---------------------------------------------------------------------------
