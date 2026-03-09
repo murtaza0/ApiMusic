@@ -1,138 +1,96 @@
-# anymusic.ai Music Generation Bot + REST API
+# anymusic.ai — Production-Ready FastAPI
 
-A Python web app (Flask) + REST API + CLI that generates music via the anymusic.ai API.
-No captcha, no manual cookie setup — API calls go directly from the user's browser (web UI) or via the public REST API.
+FastAPI-based REST API that generates AI music via anymusic.ai.
+Deployable on Vercel Serverless (60 s max duration).
 
-## Architecture
+## File Structure
 
 | File | Purpose |
 |------|---------|
-| `app.py` | Flask server — web UI, public REST API `/v1/`, internal endpoints |
-| `bot_core.py` | Core logic: generate, poll, download, spoofing (used by CLI/batch/API) |
-| `batch.py` | Batch runner — processes prompts from `prompts.txt` |
-| `main.py` | Simple CLI entry point |
-| `prompts.txt` | Song prompts for batch processing |
-| `templates/index.html` | Single-page web UI — makes API calls client-side from browser |
-| `music_outputs/` | Downloaded MP3 files (auto-created) |
-| `vercel.json` | Vercel deployment config |
-| `requirements.txt` | Python dependencies for deployment |
+| `main.py` | FastAPI app — all routes, spoofing logic, async generation |
+| `requirements.txt` | fastapi, uvicorn, httpx, curl_cffi, pydantic |
+| `vercel.json` | Vercel routing + maxDuration: 60 |
+| `music_outputs/` | Local MP3 downloads (Replit only) |
 
-## Public REST API — /v1/
-
-**Base URL:** `https://your-domain/v1/`
-
-**Auth (optional):** Set `API_KEY` env var → clients send `Authorization: Bearer <key>`
-
-### Endpoints
+## API Endpoints
 
 | Route | Method | Description |
 |-------|--------|-------------|
-| `/v1/health` | GET | Server health + auth status |
-| `/v1/generate` | POST | Start async generation → returns `job_id` |
-| `/v1/jobs/<job_id>` | GET | Poll job status + get audio URLs |
+| `/` | GET | Service info + endpoint map |
+| `/health` | GET | Liveness probe |
+| `/generate` | POST | Fire 2 parallel requests → returns 2 task_ids |
+| `/status/{task_id}` | GET | Single-check poll; streams audio/mpeg when ready |
+| `/docs` | GET | Auto-generated Swagger UI |
 
-### POST /v1/generate
+## POST /generate
 
-Request body (JSON):
 ```json
 {
-  "prompt":   "sad rainy night piano",
-  "genre":    "Classical",
-  "quantity": 2,
+  "prompt":   "upbeat Punjabi dhol pop",
+  "genre":    "Pop",
   "mode":     "text-to-song"
 }
 ```
 
-For lyrics mode:
-```json
-{
-  "prompt":   "any description",
-  "mode":     "lyrics-to-song",
-  "lyrics":   "Verse 1: full lyrics here...",
-  "title":    "My Song",
-  "style":    "Pop",
-  "mood":     "Romantic",
-  "scenario": "Late night drive",
-  "quantity": 2
-}
-```
-
-Response (202):
-```json
-{
-  "ok": true,
-  "job_id": "a23c6bee...",
-  "status": "queued",
-  "poll_url": "/v1/jobs/a23c6bee..."
-}
-```
-
-### GET /v1/jobs/<job_id>
-
-Poll this until `done: true`.
+Lyrics mode adds: `title`, `lyrics`, `style`, `mood`, `scenario`
 
 Response:
 ```json
 {
   "ok": true,
-  "job_id": "a23c6bee...",
-  "status": "ok",
-  "done": true,
   "variants": [
-    { "cdn_url": "https://...", "local_url": "/audio/track_v1_....mp3" },
-    { "cdn_url": "https://...", "local_url": "/audio/track_v2_....mp3" }
-  ],
-  "logs": ["[generate] ...", "[poll] ..."],
-  "error": null
+    {"task_id": "ready_<b64>",  "status": "ready"},
+    {"task_id": "abc123",       "status": "pending"}
+  ]
 }
 ```
 
-Status values: `queued` → `running` → `ok` | `failed` | `timeout` | `error`
+## GET /status/{task_id}
 
-### Example: call from anywhere (curl)
+- `ready_<b64>` → decodes CDN URL, fetches and streams `audio/mpeg` immediately
+- real task_id → single poll to anymusic.ai `/api/music/task/{id}`; returns
+  `{"status":"pending"}` or streams audio if done
 
-```bash
-# Start generation
-curl -X POST https://your-app.com/v1/generate \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_KEY" \
-  -d '{"prompt": "Punjabi folk dhol beat", "genre": "Punjabi Folk", "quantity": 2}'
+**Client should retry every 8 s until it receives audio bytes.**
 
-# Poll until done
-curl https://your-app.com/v1/jobs/<job_id> \
-  -H "Authorization: Bearer YOUR_KEY"
-```
+## Variant Logic
 
-## Vercel Deployment
+`/generate` fires 2 parallel `curl_cffi AsyncSession` requests using different
+browser profiles (randomised User-Agent + Sec-Ch-Ua + platform). Both run via
+`asyncio.gather` with a 90 s timeout.
 
-1. Push repo to GitHub
-2. Import on vercel.com → auto-detects `vercel.json`
-3. Set env vars: `API_KEY` (optional), `SESSION_SECRET`
-4. Deploy — Vercel IPs are not blocked by anymusic.ai so server-side generation works
+## Cookie / Identity Spoofing
 
-## Web UI Flow
-
-1. Open the app — "Auto-session active" (no setup needed)
-2. **Simple mode**: type song description + genre → text-to-song
-3. **Custom mode**: enter lyrics + title + style/mood/scenario → lyrics-to-song
-4. Click **Generate Song** → 2 variants generated, shown side-by-side
-5. Server saves both MP3s to `music_outputs/`
+Every request generates fresh `_ga`, `_ga_*`, `_clck`, `_clsk` cookies plus
+randomised `Accept-Language`. `curl_cffi` uses Chrome TLS fingerprints
+(`impersonate="chrome131"`) to pass bot checks.
 
 ## anymusic.ai API
 
-- **Generate:** `POST https://anymusic.ai/api/music/generate`
-  - `text-to-song`: `{"type":"text-to-song","prompt":"...","genre":"Pop","quantity":2}`
-  - `lyrics-to-song`: `{"type":"lyrics-to-song","lyrics":"...","title":"...","styles":{...},"quantity":2}`
-- **CORS**: `Access-Control-Allow-Origin: *` — only `Content-Type` header allowed (no custom headers)
-- **IP policy**: browser (residential) IPs allowed; datacenter IPs (Replit) blocked; Vercel allowed
+- Generate: `POST https://anymusic.ai/api/music/generate`
+- Task poll: `GET  https://anymusic.ai/api/music/task/{task_id}`
+- CORS: `Access-Control-Allow-Origin: *`
+- IP policy: Vercel IPs allowed; Replit datacenter IPs blocked
 
-## Key Features
+## Vercel Deployment
 
-- **2 variants per request**: `quantity: 2` in all modes
-- **Client-side API calls**: browser fetches anymusic.ai directly (no Replit IP block)
-- **Public REST API**: `/v1/generate` + `/v1/jobs/<id>` for external integrations
-- **Optional API key auth**: `API_KEY` env var protects all `/v1/` routes
-- **Vercel-ready**: `vercel.json` + `requirements.txt` included
-- **Auto-session**: GA tracking cookies auto-generated; no browser extraction needed
-- **Auto-download**: completed songs saved as MP3 to `music_outputs/`
-- **curl_cffi**: Chrome TLS fingerprint spoofing for CLI/batch
+1. Push repo to GitHub (`https://github.com/murtaza0/Api.git`)
+2. Import on vercel.com → auto-detects `vercel.json`
+3. No env vars required (optional: set `API_KEY` for auth)
+4. Deploy → server-side generation works (Vercel IPs not blocked)
+
+## GitHub Push (from Replit Shell)
+
+```bash
+git remote set-url origin https://YOUR_TOKEN@github.com/murtaza0/Api.git
+git add -A
+git commit -m "FastAPI rewrite"
+git push origin main
+```
+
+Replace `YOUR_TOKEN` with a GitHub Personal Access Token (Settings → Developer settings → Personal access tokens → repo scope).
+
+## Running Locally (Replit)
+
+Workflow: `python main.py` → uvicorn on port 5000
+Swagger UI: `https://<replit-url>/docs`
