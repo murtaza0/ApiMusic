@@ -2,11 +2,11 @@
 bot_core.py — anymusic.ai generation logic
 -------------------------------------------
 Features:
-  - Cookie rotation every 3 requests (_ga / _clck randomised)
+  - Full per-request browser spoofing: User-Agent, TLS fingerprint, cookies, platform
   - Task ID capture from POST response
   - Status polling at /api/music/task/{taskId}
   - Auto-download MP3 to music_outputs/
-  - No captcha required
+  - No captcha, no manual setup required
 """
 from __future__ import annotations
 
@@ -19,10 +19,13 @@ from typing import Callable, Optional
 
 try:
     from curl_cffi import requests as cf_requests
+    from curl_cffi.requests.impersonate import BrowserType
     _CURL_AVAILABLE = True
+    _IMPERSONATE_TARGETS = [t.name for t in BrowserType if t.name.startswith("chrome")]
 except ImportError:
     import requests as cf_requests
     _CURL_AVAILABLE = False
+    _IMPERSONATE_TARGETS = []
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -37,24 +40,80 @@ POLL_TIMEOUT  = 420   # 7 minutes
 
 OUTPUT_DIR = "music_outputs"
 
-BASE_HEADERS = {
-    "Origin":       "https://anymusic.ai",
-    "Referer":      "https://anymusic.ai/",
-    "Content-Type": "application/json",
-    "User-Agent":   (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/131.0.0.0 Safari/537.36"
-    ),
-    "Accept":             "*/*",
-    "Accept-Language":    "en-US,en;q=0.9",
-    "sec-ch-ua":          '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
-    "sec-ch-ua-mobile":   "?0",
-    "sec-ch-ua-platform": '"Windows"',
-    "Sec-Fetch-Dest":     "empty",
-    "Sec-Fetch-Mode":     "cors",
-    "Sec-Fetch-Site":     "same-origin",
-}
+# ---------------------------------------------------------------------------
+# Per-request browser spoofing profiles
+# ---------------------------------------------------------------------------
+
+# Pool of realistic Chrome browser profiles (UA + platform + sec-ch-ua)
+_BROWSER_PROFILES = [
+    {
+        "version": "120",
+        "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "platform": '"Windows"',
+        "sec_ch_ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+    },
+    {
+        "version": "124",
+        "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "platform": '"Windows"',
+        "sec_ch_ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+    },
+    {
+        "version": "131",
+        "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "platform": '"Windows"',
+        "sec_ch_ua": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+    },
+    {
+        "version": "131",
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "platform": '"macOS"',
+        "sec_ch_ua": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+    },
+    {
+        "version": "133",
+        "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+        "platform": '"Windows"',
+        "sec_ch_ua": '"Chromium";v="133", "Google Chrome";v="133", "Not-A.Brand";v="24"',
+    },
+    {
+        "version": "136",
+        "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+        "platform": '"Windows"',
+        "sec_ch_ua": '"Chromium";v="136", "Google Chrome";v="136", "Not-A.Brand";v="24"',
+    },
+    {
+        "version": "120",
+        "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "platform": '"Linux"',
+        "sec_ch_ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+    },
+    {
+        "version": "124",
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "platform": '"macOS"',
+        "sec_ch_ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+    },
+]
+
+_ACCEPT_LANGUAGES = [
+    "en-US,en;q=0.9",
+    "en-GB,en;q=0.9,en-US;q=0.8",
+    "en-US,en;q=0.8",
+    "en-CA,en;q=0.9,fr-CA;q=0.8",
+    "en-AU,en;q=0.9",
+    "en-US,en;q=0.9,fr;q=0.7",
+]
+
+
+def _random_profile() -> dict:
+    return random.choice(_BROWSER_PROFILES)
+
+
+def _random_impersonate() -> str:
+    if not _IMPERSONATE_TARGETS:
+        return ""
+    return random.choice(_IMPERSONATE_TARGETS)
 
 GENRES = [
     "Pop", "R&B", "Rock", "Hip-Hop", "Jazz", "Classical",
@@ -69,129 +128,119 @@ SCENARIOS = [
 
 
 # ---------------------------------------------------------------------------
-# Cookie rotation
+# Cookie + Header spoofing — fully randomized on every request
 # ---------------------------------------------------------------------------
-_request_count = 0
-
 
 def _rand_str(length: int, chars: str = string.ascii_lowercase + string.digits) -> str:
     return "".join(random.choices(chars, k=length))
 
 
 def _random_ga() -> str:
+    """Google Analytics client ID — new random user + random first-visit timestamp."""
     n1 = random.randint(100_000_000, 999_999_999)
     n2 = random.randint(100_000_000, 999_999_999)
-    ts = int(time.time()) - random.randint(0, 86400)
+    ts = int(time.time()) - random.randint(0, 7 * 86400)
     return f"GA1.1.{n1}.{ts}"
 
 
+def _random_ga4() -> str:
+    """GA4 session cookie with randomized session start time."""
+    ts  = int(time.time()) - random.randint(0, 3600)
+    off = random.randint(1, 120)
+    return f"GS2.1.s{ts}$o{random.randint(1,5)}$g0$t{ts + off}$j60$l0$h0"
+
+
 def _random_clck() -> str:
+    """Microsoft Clarity click fingerprint."""
     part = _rand_str(6)
-    num1 = random.randint(1000, 9999)
-    num2 = random.randint(1000, 9999)
-    return f"{part}%5E2%5Eg{num1}%5E0%5E{num2}"
-
-
-def _random_ga4(property_id: str = "9R01R8BKDB") -> str:
-    """GA4 session cookie: GS2.1.s{ts}$o1$g0$t{ts}$j60$l0$h0"""
-    ts = int(time.time()) - random.randint(0, 3600)
-    return f"GS2.1.s{ts}$o1$g0$t{ts}$j60$l0$h0"
+    n1   = random.randint(10, 9999)
+    n2   = random.randint(10, 9999)
+    return f"{part}%5E2%5Eg{n1}%5E0%5E{n2}"
 
 
 def _random_clsk() -> str:
-    """MS Clarity session cookie."""
-    ts = int(time.time())
+    """Microsoft Clarity session cookie."""
+    ts   = int(time.time()) - random.randint(0, 1800)
     part = _rand_str(8)
-    return f"{part}%5E{ts}%5E1%5E1%5El.clarity.ms%2Fcollect"
+    page = random.randint(1, 5)
+    return f"{part}%5E{ts}%5E{page}%5E1%5El.clarity.ms%2Fcollect"
 
 
 def auto_generate_cookies() -> str:
     """
-    Generate a full realistic-looking cookie string for anymusic.ai.
-    Mimics the 4 tracking cookies that a real browser would have after
-    visiting the site — no manual extraction required.
-
-    Cookies generated:
-      _ga              — Google Analytics client ID
-      _ga_9R01R8BKDB   — GA4 session data
-      _clck            — Microsoft Clarity click fingerprint
-      _clsk            — Microsoft Clarity session
+    Fresh set of realistic tracking cookies on every call.
+    Mimics Google Analytics + Microsoft Clarity cookies from a real browser visit.
+    All values are randomized: client ID, session timestamps, click counters.
     """
-    ga   = _random_ga()
-    ga4  = _random_ga4()
-    clck = _random_clck()
-    clsk = _random_clsk()
-    return f"_ga={ga}; _ga_9R01R8BKDB={ga4}; _clck={clck}; _clsk={clsk}"
-
-
-def _rotate_cookies(base_cookie: str) -> str:
-    """
-    Parse the base cookie string and replace _ga (main) and _clck with fresh
-    random values. Called every 3 requests to simulate a new user session.
-    """
-    if not base_cookie:
-        return auto_generate_cookies()
-
-    parts = [p.strip() for p in base_cookie.split(";") if p.strip()]
-    result = []
-    had_ga   = False
-    had_clck = False
-    had_ga4  = False
-    had_clsk = False
-
-    for p in parts:
-        if p.startswith("_ga=") and "_ga_" not in p:
-            result.append(f"_ga={_random_ga()}")
-            had_ga = True
-        elif p.startswith("_ga_"):
-            result.append(f"_ga_9R01R8BKDB={_random_ga4()}")
-            had_ga4 = True
-        elif p.startswith("_clck="):
-            result.append(f"_clck={_random_clck()}")
-            had_clck = True
-        elif p.startswith("_clsk="):
-            result.append(f"_clsk={_random_clsk()}")
-            had_clsk = True
-        else:
-            result.append(p)
-
-    if not had_ga:   result.insert(0, f"_ga={_random_ga()}")
-    if not had_ga4:  result.append(f"_ga_9R01R8BKDB={_random_ga4()}")
-    if not had_clck: result.append(f"_clck={_random_clck()}")
-    if not had_clsk: result.append(f"_clsk={_random_clsk()}")
-
-    return "; ".join(result)
-
-
-# Per-session cookie cache — regenerated every 3 requests
-_session_cookie: str = ""
-_request_count  = 0
+    return (
+        f"_ga={_random_ga()}; "
+        f"_ga_9R01R8BKDB={_random_ga4()}; "
+        f"_clck={_random_clck()}; "
+        f"_clsk={_random_clsk()}"
+    )
 
 
 def _get_cookie(base_cookie: str) -> str:
     """
-    Returns the cookie to use for this request.
-    - If base_cookie provided: use it, rotate every 3rd request
-    - If no base_cookie: auto-generate tracking cookies, rotate every 3rd request
+    Always return a fresh set of cookies.
+    - base_cookie provided → merge it with fresh tracking cookies
+    - no base_cookie → generate all 4 tracking cookies fresh
     """
-    global _request_count, _session_cookie
-    _request_count += 1
-
     if not base_cookie:
-        if not _session_cookie or _request_count % 3 == 0:
-            _session_cookie = auto_generate_cookies()
-        return _session_cookie
+        return auto_generate_cookies()
+    # User provided their own cookie string — keep non-tracking parts, refresh tracking
+    parts = [p.strip() for p in base_cookie.split(";") if p.strip()]
+    kept = [p for p in parts
+            if not (p.startswith("_ga") or p.startswith("_clck") or p.startswith("_clsk"))]
+    fresh = [
+        f"_ga={_random_ga()}",
+        f"_ga_9R01R8BKDB={_random_ga4()}",
+        f"_clck={_random_clck()}",
+        f"_clsk={_random_clsk()}",
+    ]
+    return "; ".join(kept + fresh)
 
-    if _request_count % 3 == 0:
-        return _rotate_cookies(base_cookie)
-    return base_cookie
 
-
-def _build_headers(cookie: str) -> dict:
-    h = dict(BASE_HEADERS)
+def _build_headers(cookie: str = "") -> dict:
+    """
+    Build a fully spoofed, randomized header set for each request.
+    Picks a random browser profile (UA + platform + sec-ch-ua) and
+    a random Accept-Language on every call.
+    """
+    profile = _random_profile()
+    lang    = random.choice(_ACCEPT_LANGUAGES)
+    h = {
+        "Origin":             "https://anymusic.ai",
+        "Referer":            "https://anymusic.ai/",
+        "Content-Type":       "application/json",
+        "User-Agent":         profile["ua"],
+        "Accept":             "*/*",
+        "Accept-Language":    lang,
+        "sec-ch-ua":          profile["sec_ch_ua"],
+        "sec-ch-ua-mobile":   "?0",
+        "sec-ch-ua-platform": profile["platform"],
+        "Sec-Fetch-Dest":     "empty",
+        "Sec-Fetch-Mode":     "cors",
+        "Sec-Fetch-Site":     "same-origin",
+        "Priority":           "u=1, i",
+    }
     if cookie:
         h["Cookie"] = cookie
     return h
+
+
+def _get_impersonate(profile: dict) -> str:
+    """Pick a curl_cffi impersonation target matching the browser profile version."""
+    if not _CURL_AVAILABLE:
+        return ""
+    ver = profile.get("version", "131")
+    # Find the closest available target
+    for target in _IMPERSONATE_TARGETS:
+        if ver in target:
+            return target
+    return random.choice(_IMPERSONATE_TARGETS) if _IMPERSONATE_TARGETS else ""
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -226,8 +275,11 @@ def download_audio(
 
     try:
         log(f"[download] Downloading: {audio_url}")
-        impersonate_opts = {"impersonate": "chrome131"} if _CURL_AVAILABLE else {}
-        resp = cf_requests.get(audio_url, timeout=60, stream=True, **impersonate_opts)
+        dl_profile = _random_profile()
+        dl_headers = _build_headers()
+        dl_imp     = _get_impersonate(dl_profile)
+        dl_imp_opts = {"impersonate": dl_imp} if (_CURL_AVAILABLE and dl_imp) else {}
+        resp = cf_requests.get(audio_url, headers=dl_headers, timeout=60, stream=True, **dl_imp_opts)
         resp.raise_for_status()
 
         with open(out_path, "wb") as f:
@@ -262,8 +314,14 @@ def start_generation(
     POST to /api/music/generate.
     Returns the task_id string, or None on failure.
     """
-    rotated_cookie = _get_cookie(cookie)
-    headers = _build_headers(rotated_cookie)
+    profile  = _random_profile()
+    fresh_cookie = _get_cookie(cookie)
+    headers  = _build_headers(fresh_cookie)
+    impersonate = _get_impersonate(profile)
+
+    log(f"[generate] POST {GENERATE_URL}  mode={mode}")
+    log(f"[spoof]    UA={profile['ua'][:60]}...")
+    log(f"[spoof]    Platform={profile['platform']}  Fingerprint={impersonate or 'native'}")
 
     if mode == "text-to-song":
         payload = {
@@ -287,10 +345,8 @@ def start_generation(
             "is_private": False,
         }
 
-    log(f"[generate] POST {GENERATE_URL}  mode={mode}")
-    log(f"[generate] Using {'curl_cffi Chrome impersonation' if _CURL_AVAILABLE else 'requests (fallback)'}")
     try:
-        impersonate_opts = {"impersonate": "chrome131"} if _CURL_AVAILABLE else {}
+        impersonate_opts = {"impersonate": impersonate} if (_CURL_AVAILABLE and impersonate) else {}
         resp = cf_requests.post(
             GENERATE_URL, json=payload, headers=headers, timeout=60,
             **impersonate_opts
@@ -381,7 +437,6 @@ def poll_task_status(
     Poll the task status endpoint every POLL_INTERVAL seconds.
     Returns audio_url when done, or None on timeout/error.
     """
-    headers = _build_headers(cookie)
     deadline = time.time() + POLL_TIMEOUT
     attempt  = 0
 
@@ -406,8 +461,11 @@ def poll_task_status(
 
         for url in (urls_to_try if working_url is None else [working_url]):
             try:
-                impersonate_opts = {"impersonate": "chrome131"} if _CURL_AVAILABLE else {}
-                resp = cf_requests.get(url, headers=headers, timeout=30, **impersonate_opts)
+                poll_profile = _random_profile()
+                poll_headers = _build_headers(_get_cookie(cookie))
+                poll_imp     = _get_impersonate(poll_profile)
+                imp_opts     = {"impersonate": poll_imp} if (_CURL_AVAILABLE and poll_imp) else {}
+                resp = cf_requests.get(url, headers=poll_headers, timeout=30, **imp_opts)
                 if resp.status_code == 404:
                     continue
                 resp.raise_for_status()

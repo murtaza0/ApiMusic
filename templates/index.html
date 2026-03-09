@@ -450,10 +450,26 @@
   // anymusic.ai returns Access-Control-Allow-Origin: * so CORS is not an issue.
   const AM_GENERATE = 'https://anymusic.ai/api/music/generate';
   const AM_TASK     = id => `https://anymusic.ai/api/music/task/${id}`;
-  const AM_HEADERS  = {
-    'Content-Type': 'application/json',
-    'Accept': '*/*',
-  };
+  // Randomized spoofing helpers — rotated on every request
+  const _ACCEPT_LANGS = [
+    'en-US,en;q=0.9', 'en-GB,en;q=0.9,en-US;q=0.8',
+    'en-US,en;q=0.8', 'en-CA,en;q=0.9,fr-CA;q=0.8',
+    'en-AU,en;q=0.9', 'en-US,en;q=0.9,fr;q=0.7',
+  ];
+
+  function _randEl(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+  function _randInt(a, b) { return Math.floor(Math.random() * (b - a + 1)) + a; }
+  function _randHex(n) { return [...Array(n)].map(() => Math.floor(Math.random()*16).toString(16)).join(''); }
+
+  function _freshHeaders() {
+    return {
+      'Content-Type':   'application/json',
+      'Accept':         '*/*',
+      'Accept-Language': _randEl(_ACCEPT_LANGS),
+      'X-Request-ID':   _randHex(16),
+      'Cache-Control':  'no-cache',
+    };
+  }
 
   function shake(id) {
     const el = document.getElementById(id);
@@ -508,7 +524,7 @@
 
       const resp = await fetch(AM_GENERATE, {
         method: 'POST',
-        headers: AM_HEADERS,
+        headers: _freshHeaders(),
         body: JSON.stringify(payload),
       });
 
@@ -567,7 +583,7 @@
       await sleep(POLL_INTERVAL);
       attempt++;
       try {
-        const r = await fetch(AM_TASK(taskId), { headers: AM_HEADERS });
+        const r = await fetch(AM_TASK(taskId), { headers: _freshHeaders() });
         if (r.status === 404) { jobLog(jobId, `[poll] attempt ${attempt}: 404 not found yet`); continue; }
         const d = await r.json();
         jobLog(jobId, `[poll] attempt ${attempt}: ` + JSON.stringify(d).slice(0, 250));
