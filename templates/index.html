@@ -542,10 +542,23 @@
       jobLog(jobId, '[generate] Response: ' + JSON.stringify(data).slice(0, 300));
       setStep(jobId, 'gen', 'done');
 
-      const taskId = extractTaskId(data);
-      if (!taskId) throw new Error('No task ID in response: ' + JSON.stringify(data).slice(0, 200));
+      // Check if audio URL came back directly in the generate response (synchronous generation)
+      const directAudio = extractAudioUrl(data);
+      if (directAudio) {
+        jobLog(jobId, '[generate] Audio ready immediately: ' + directAudio);
+        setStep(jobId, 'poll', 'done');
+        setStep(jobId, 'done', 'done');
+        setBadge(jobId, 'ok');
+        showAudio(jobId, directAudio);
+        notifyServer(extractTaskId(data) || jobId, directAudio);
+        return;
+      }
 
-      jobLog(jobId, '[generate] Task ID: ' + taskId);
+      // No immediate audio — fall back to polling
+      const taskId = extractTaskId(data);
+      if (!taskId) throw new Error('No task ID or audio in response: ' + JSON.stringify(data).slice(0, 200));
+
+      jobLog(jobId, '[generate] Task ID: ' + taskId + ' — polling for completion...');
       setStep(jobId, 'poll', 'active');
       setBadge(jobId, 'running');
 
@@ -558,6 +571,19 @@
       btn.disabled = false;
       btn.innerHTML = '✨ Generate Song';
     }
+  }
+
+  function extractAudioUrl(data) {
+    const search = obj => {
+      if (!obj || typeof obj !== 'object') return null;
+      for (const k of ['audio_url','audioUrl','audio','mp3_url','mp3Url','file_url','fileUrl','url']) {
+        if (obj[k] && typeof obj[k] === 'string' && obj[k].startsWith('http')) return obj[k];
+      }
+      if (Array.isArray(obj)) return search(obj[0]);
+      if (obj.data) return search(obj.data);
+      return null;
+    };
+    return search(data);
   }
 
   function extractTaskId(data) {
