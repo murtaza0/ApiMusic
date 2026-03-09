@@ -1,0 +1,2042 @@
+
+7
+requests
+
+
+
+
+
+Method
+Status
+Source
+Host
+Path and query
+HTTP/1.1
+POST anymusic . ai
+Method: POST
+URL
+https://anymusic.ai/api/music/generate
+Headers
+Accept:
+*/*
+Accept-Encoding:
+gzip, deflate, br, zstd
+Accept-Language:
+en-US,en;q=0.9
+Connection:
+keep-alive
+Content-Length:
+592
+Content-Type:
+application/json
+Cookie:
+_ga=GA1.1.555948990.1773037545; _ga_9R01R8BKDB=GS2.1.s1773037544$o1$g0$t1773037544$j60$l0$h0; _clck=y23sog%5E2%5Eg47%5E0%5E2259; _clsk=1qq0xvf%5E1773037547366%5E1%5E1%5El.clarity.ms%2Fcollect
+Host:
+anymusic.ai
+Origin:
+https://anymusic.ai
+Referer:
+https://anymusic.ai/
+sec-ch-ua:
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile:
+?0
+sec-ch-ua-platform:
+"Windows"
+Sec-Fetch-Dest:
+empty
+Sec-Fetch-Mode:
+cors
+Sec-Fetch-Site:
+same-origin
+User-Agent:
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+
+592 bytes
+
+JSON
+45678910321
+{
+  "type": "lyrics-to-song",
+  "lyrics": "Verse 1:\nCity lights are shining bright tonight\nI'll wait for you until the morning light\nLove is the theme that never ends\nBringing our hearts together again\n\nChorus:\nEternal love will always be\nThe thing that sets our hearts free\nNo matter where we go\nYou're always in my soul\n\nVerse 2:\nTime may change everything we know\nBut love will …    "scenario": [
+      "Urban romance"
+    ]
+  },
+  "quantity": 1,
+  "is_private": false
+}
+PRO
+PRO
+
+cURL
+
+
+
+With Pro:
+
+
+
+
+{
+  "type": "lyrics-to-song",
+  "lyrics": "Verse 1:\nCity lights are shining bright tonight\nI'll wait for you until the morning light\nLove is the theme that never ends\nBringing our hearts together again\n\nChorus:\nEternal love will always be\nThe thing that sets our hearts free\nNo matter where we go\nYou're always in my soul\n\nVerse 2:\nTime may change everything we know\nBut love will always grow\nYou're the light that guides my way\nEvery single day",
+  "title": "Eternal Love",
+  "styles": {
+    "style": [
+      "Classical"
+    ],
+    "mood": [
+      "Romantic"
+    ],
+    "scenario": [
+      "Urban romance"
+    ]
+  },
+  "quantity": 1,
+  "is_private": false
+}
+
+
+
+
+7
+requests
+
+
+
+
+
+Method
+Status
+Source
+Host
+Path and query
+HTTP/1.1
+POST plausible . io
+Method: POST
+URL
+https://plausible.io/api/event
+Headers
+Accept:
+*/*
+Accept-Encoding:
+gzip, deflate, br, zstd
+Accept-Language:
+en-US,en;q=0.9
+Connection:
+keep-alive
+Content-Length:
+88
+Content-Type:
+text/plain
+Host:
+plausible.io
+Origin:
+https://anymusic.ai
+Referer:
+https://anymusic.ai/
+sec-ch-ua:
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile:
+?0
+sec-ch-ua-platform:
+"Windows"
+Sec-Fetch-Dest:
+empty
+Sec-Fetch-Mode:
+cors
+Sec-Fetch-Site:
+cross-site
+User-Agent:
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+
+88 bytes
+
+JSON
+45678123
+{
+  "n": "engagement",
+  "sd": 100,
+  "d": "anymusic.ai",
+  "u": "https://anymusic.ai/",
+  "e": 5769,
+  "v": 33
+}
+202
+Status: 202 Accepted
+Headers
+Accept-CH:
+Sec-CH-UA-Platform, Sec-CH-UA
+Access-Control-Allow-Credentials:
+true
+Access-Control-Allow-Origin:
+*
+application:
+127.0.0.1
+Cache-Control:
+must-revalidate, max-age=0, private
+CDN-CachedAt:
+03/09/2026 06:26:45
+CDN-EdgeStorageId:
+1345
+CDN-ProxyVer:
+1.43
+CDN-PullZone:
+682664
+CDN-RequestCountryCode:
+PK
+CDN-RequestId:
+9d21fe266dff0e1369779a27f54a4753
+CDN-RequestPullCode:
+202
+CDN-RequestPullSuccess:
+True
+CDN-RequestTime:
+0
+Connection:
+keep-alive
+Content-Length:
+2
+Content-Type:
+text/plain; charset=utf-8
+Date:
+Mon, 09 Mar 2026 06:26:45 GMT
+permissions-policy:
+interest-cohort=()
+Server:
+BunnyCDN-PK1-1345
+Via:
+1.1 Caddy
+x-plausible-dropped:
+1
+X-Request-ID:
+GJsYTv2jNwh2WYX_pbwN
+
+
+2 bytes
+
+Text
+1
+ok
+PRO
+PRO
+
+cURL
+
+
+
+With Pro:
+
+
+
+
+
+8
+requests
+
+
+
+
+
+Method
+Status
+Source
+Host
+Path and query
+HTTP/1.1
+POST plausible . io
+Method: POST
+URL
+https://plausible.io/api/event
+Headers
+Accept:
+*/*
+Accept-Encoding:
+gzip, deflate, br, zstd
+Accept-Language:
+en-US,en;q=0.9
+Connection:
+keep-alive
+Content-Length:
+88
+Content-Type:
+text/plain
+Host:
+plausible.io
+Origin:
+https://anymusic.ai
+Referer:
+https://anymusic.ai/
+sec-ch-ua:
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile:
+?0
+sec-ch-ua-platform:
+"Windows"
+Sec-Fetch-Dest:
+empty
+Sec-Fetch-Mode:
+cors
+Sec-Fetch-Site:
+cross-site
+User-Agent:
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+
+88 bytes
+
+JSON
+45678123
+{
+  "n": "engagement",
+  "sd": 100,
+  "d": "anymusic.ai",
+  "u": "https://anymusic.ai/",
+  "e": 5769,
+  "v": 33
+}
+202
+Status: 202 Accepted
+Headers
+Accept-CH:
+Sec-CH-UA-Platform, Sec-CH-UA
+Access-Control-Allow-Credentials:
+true
+Access-Control-Allow-Origin:
+*
+application:
+127.0.0.1
+Cache-Control:
+must-revalidate, max-age=0, private
+CDN-CachedAt:
+03/09/2026 06:26:45
+CDN-EdgeStorageId:
+1345
+CDN-ProxyVer:
+1.43
+CDN-PullZone:
+682664
+CDN-RequestCountryCode:
+PK
+CDN-RequestId:
+9d21fe266dff0e1369779a27f54a4753
+CDN-RequestPullCode:
+202
+CDN-RequestPullSuccess:
+True
+CDN-RequestTime:
+0
+Connection:
+keep-alive
+Content-Length:
+2
+Content-Type:
+text/plain; charset=utf-8
+Date:
+Mon, 09 Mar 2026 06:26:45 GMT
+permissions-policy:
+interest-cohort=()
+Server:
+BunnyCDN-PK1-1345
+Via:
+1.1 Caddy
+x-plausible-dropped:
+1
+X-Request-ID:
+GJsYTv2jNwh2WYX_pbwN
+
+
+2 bytes
+
+Text
+1
+ok
+PRO
+PRO
+
+cURL
+
+
+
+With Pro:
+
+
+
+
+9
+requests
+
+
+
+
+
+Method
+Status
+Source
+Host
+Path and query
+HTTP/1.1
+POST l . clarity . ms
+Method: POST
+URL
+https://l.clarity.ms/collect
+Headers
+Accept:
+application/x-clarity-gzip
+Accept-Encoding:
+gzip, deflate, br, zstd
+Accept-Language:
+en-US,en;q=0.9
+Connection:
+keep-alive
+Content-Length:
+3055
+Cookie:
+MUID=25262E1D334866733050390A324167DD
+Host:
+l.clarity.ms
+Origin:
+https://anymusic.ai
+Referer:
+https://anymusic.ai/
+sec-ch-ua:
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile:
+?0
+sec-ch-ua-platform:
+"Windows"
+Sec-Fetch-Dest:
+empty
+Sec-Fetch-Mode:
+cors
+Sec-Fetch-Site:
+cross-site
+Sec-Fetch-Storage-Access:
+active
+User-Agent:
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+
+3.1 kB
+
+Text
+1234567
+ 
+ Y  ~B@ ݂  ~  ? h  i n  m++ Z  M ' # _   iK  l 4m ?} xyx  {b  <A5 2 2 0  k-`        v   Lhk7	L Ǐ tX'C~  su;} . λ}[ &Y .Y $K  9ǔ	  
+ BA b h !&P+	 T +v y
+     P
+
+  ּ  Rz " : 
+ % 0 I8 \    q %  @P2 P     \\ T  ) B㞄xka { @. L  1BJ  $  WA u % q4 5 p ) <j'  JBΣJB  = <
+
+204
+Status: 204 No Content
+Headers
+Access-Control-Allow-Credentials:
+true
+Access-Control-Allow-Origin:
+https://anymusic.ai
+Connection:
+keep-alive
+Date:
+Mon, 09 Mar 2026 06:26:49 GMT
+Request-Context:
+appId=cid-v1:a449a586-8786-487f-a449-dc1b282a2628
+Server:
+nginx
+Vary:
+Origin
+PRO
+PRO
+
+cURL
+
+
+
+With Pro:
+
+
+
+ 
+
+
+
+
+9
+requests
+
+
+
+
+
+Method
+Status
+Source
+Host
+Path and query
+HTTP/1.1
+POST l . clarity . ms
+Method: POST
+URL
+https://l.clarity.ms/collect
+Headers
+Accept:
+application/x-clarity-gzip
+Accept-Encoding:
+gzip, deflate, br, zstd
+Accept-Language:
+en-US,en;q=0.9
+Connection:
+keep-alive
+Content-Length:
+195
+Cookie:
+MUID=25262E1D334866733050390A324167DD
+Host:
+l.clarity.ms
+Origin:
+https://anymusic.ai
+Referer:
+https://anymusic.ai/
+sec-ch-ua:
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile:
+?0
+sec-ch-ua-platform:
+"Windows"
+Sec-Fetch-Dest:
+empty
+Sec-Fetch-Mode:
+cors
+Sec-Fetch-Site:
+cross-site
+Sec-Fetch-Storage-Access:
+active
+User-Agent:
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+
+195 bytes
+
+Text
+312
+ 
+MN j 0  =  J   +B  &%Ik섚 ʥa`  a   B   A  X    a_ _ @     @ , { 	~      }?]  m=   SM4 "     Q* s
+"  a  #Č  #,IR 
+   o ˹e 9,x 77H@N	  -- z; +   8  f   ,  x Ӕ
+204
+Status: 204 No Content
+Headers
+Access-Control-Allow-Credentials:
+true
+Access-Control-Allow-Origin:
+https://anymusic.ai
+Connection:
+keep-alive
+Date:
+Mon, 09 Mar 2026 06:27:51 GMT
+Request-Context:
+appId=cid-v1:a449a586-8786-487f-a449-dc1b282a2628
+Server:
+nginx
+Vary:
+Origin
+PRO
+PRO
+
+cURL
+
+
+
+With Pro:
+
+
+
+
+ 
+
+
+9
+requests
+
+
+
+
+
+Method
+Status
+Source
+Host
+Path and query
+HTTP/1.1
+POST plausible . io
+Method: POST
+URL
+https://plausible.io/api/event
+Headers
+Accept:
+*/*
+Accept-Encoding:
+gzip, deflate, br, zstd
+Accept-Language:
+en-US,en;q=0.9
+Connection:
+keep-alive
+Content-Length:
+88
+Content-Type:
+text/plain
+Host:
+plausible.io
+Origin:
+https://anymusic.ai
+Referer:
+https://anymusic.ai/
+sec-ch-ua:
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile:
+?0
+sec-ch-ua-platform:
+"Windows"
+Sec-Fetch-Dest:
+empty
+Sec-Fetch-Mode:
+cors
+Sec-Fetch-Site:
+cross-site
+User-Agent:
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+
+88 bytes
+
+JSON
+31245678
+{
+  "n": "engagement",
+  "sd": 100,
+  "d": "anymusic.ai",
+  "u": "https://anymusic.ai/",
+  "e": 4596,
+  "v": 33
+}
+202
+Status: 202 Accepted
+Headers
+Accept-CH:
+Sec-CH-UA-Platform, Sec-CH-UA
+Access-Control-Allow-Credentials:
+true
+Access-Control-Allow-Origin:
+*
+application:
+127.0.0.1
+Cache-Control:
+must-revalidate, max-age=0, private
+CDN-CachedAt:
+03/09/2026 06:28:04
+CDN-EdgeStorageId:
+1345
+CDN-ProxyVer:
+1.43
+CDN-PullZone:
+682664
+CDN-RequestCountryCode:
+PK
+CDN-RequestId:
+b8131e9b331f85c0742a101d4fca71b7
+CDN-RequestPullCode:
+202
+CDN-RequestPullSuccess:
+True
+CDN-RequestTime:
+0
+Connection:
+keep-alive
+Content-Length:
+2
+Content-Type:
+text/plain; charset=utf-8
+Date:
+Mon, 09 Mar 2026 06:28:04 GMT
+permissions-policy:
+interest-cohort=()
+Server:
+BunnyCDN-PK1-1345
+Via:
+1.1 Caddy
+x-plausible-dropped:
+1
+X-Request-ID:
+GJsYYTnHvWItt9NCGHKM
+
+
+2 bytes
+
+Text
+1
+ok
+PRO
+PRO
+
+cURL
+
+
+
+With Pro:
+
+
+
+
+{
+  "n": "engagement",
+  "sd": 100,
+  "d": "anymusic.ai",
+  "u": "https://anymusic.ai/",
+  "e": 4596,
+  "v": 33
+}
+
+
+
+9
+requests
+
+
+
+
+
+Method
+Status
+Source
+Host
+Path and query
+HTTP/1.1
+POST l . clarity . ms
+Method: POST
+URL
+https://l.clarity.ms/collect
+Headers
+Accept:
+application/x-clarity-gzip
+Accept-Encoding:
+gzip, deflate, br, zstd
+Accept-Language:
+en-US,en;q=0.9
+Connection:
+keep-alive
+Content-Length:
+226
+Cookie:
+MUID=25262E1D334866733050390A324167DD
+Host:
+l.clarity.ms
+Origin:
+https://anymusic.ai
+Referer:
+https://anymusic.ai/
+sec-ch-ua:
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile:
+?0
+sec-ch-ua-platform:
+"Windows"
+Sec-Fetch-Dest:
+empty
+Sec-Fetch-Mode:
+cors
+Sec-Fetch-Site:
+cross-site
+Sec-Fetch-Storage-Access:
+active
+User-Agent:
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+
+226 bytes
+
+Text
+12
+ 
+M Aj @E  ǖ4    0 nR   I ) {'8A= >H  7 vč7 	"U  R" :  e:| g-  w 4   H Zt ^  m  r   }3[ Au  vK0  X)G ? b   A   S	 <s%  "  -W)o  	Qg ۳a   `aY ¬T bz1+%sX =$ * 9 \ E\n Ӻ  ԗ( "j   jJ6l
+204
+Status: 204 No Content
+Headers
+Access-Control-Allow-Credentials:
+true
+Access-Control-Allow-Origin:
+https://anymusic.ai
+Connection:
+keep-alive
+Date:
+Mon, 09 Mar 2026 06:28:10 GMT
+Request-Context:
+appId=cid-v1:a449a586-8786-487f-a449-dc1b282a2628
+Server:
+nginx
+Vary:
+Origin
+PRO
+PRO
+
+cURL
+
+
+
+With Pro:
+
+
+
+ 
+
+
+10
+requests
+
+
+
+
+
+Method
+Status
+Source
+Host
+Path and query
+HTTP/1.1
+GET anymusic . ai
+Method: GET
+URL
+https://anymusic.ai/images/covers/urban.svg
+Headers
+Accept:
+image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8
+Accept-Encoding:
+gzip, deflate, br, zstd
+Accept-Language:
+en-US,en;q=0.9
+Connection:
+keep-alive
+Cookie:
+_ga=GA1.1.555948990.1773037545; _ga_9R01R8BKDB=GS2.1.s1773037544$o1$g0$t1773037544$j60$l0$h0; _clck=y23sog%5E2%5Eg47%5E0%5E2259; _clsk=1qq0xvf%5E1773037547366%5E1%5E1%5El.clarity.ms%2Fcollect
+Host:
+anymusic.ai
+Referer:
+https://anymusic.ai/
+sec-ch-ua:
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile:
+?0
+sec-ch-ua-platform:
+"Windows"
+Sec-Fetch-Dest:
+image
+Sec-Fetch-Mode:
+no-cors
+Sec-Fetch-Site:
+same-origin
+User-Agent:
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+200
+Status: 200 OK
+Headers
+Accept-Ranges:
+bytes
+Access-Control-Allow-Origin:
+*
+Age:
+0
+Cache-Control:
+public, s-maxage=3600, stale-while-revalidate=86400
+Content-Disposition:
+inline; filename="urban.svg"
+Content-Encoding:
+br
+Content-Length:
+465
+Content-Type:
+image/svg+xml
+Date:
+Mon, 09 Mar 2026 06:28:55 GMT
+Etag:
+"f3d0bd8e54711e91893b54fe01b78a34"
+Last-Modified:
+Mon, 09 Mar 2026 06:28:55 GMT
+Server:
+Vercel
+Strict-Transport-Security:
+max-age=63072000
+X-Content-Type-Options:
+nosniff
+X-Frame-Options:
+DENY
+X-Matched-Path:
+/images/covers/urban.svg
+X-Vercel-Cache:
+HIT
+X-Vercel-Id:
+bom1::rr6sr-1773037735599-473b433e8052
+X-Xss-Protection:
+1; mode=block
+
+
+1.2 kB
+
+Image
+
+PRO
+PRO
+
+cURL
+
+
+
+With Pro:
+
+
+
+
+
+10
+requests
+
+
+
+
+
+Method
+Status
+Source
+Host
+Path and query
+HTTP/1.1
+POST l . clarity . ms
+Method: POST
+URL
+https://l.clarity.ms/collect
+Headers
+Accept:
+application/x-clarity-gzip
+Accept-Encoding:
+gzip, deflate, br, zstd
+Accept-Language:
+en-US,en;q=0.9
+Connection:
+keep-alive
+Content-Length:
+2123
+Cookie:
+MUID=25262E1D334866733050390A324167DD
+Host:
+l.clarity.ms
+Origin:
+https://anymusic.ai
+Referer:
+https://anymusic.ai/
+sec-ch-ua:
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile:
+?0
+sec-ch-ua-platform:
+"Windows"
+Sec-Fetch-Dest:
+empty
+Sec-Fetch-Mode:
+cors
+Sec-Fetch-Site:
+cross-site
+Sec-Fetch-Storage-Access:
+active
+User-Agent:
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+
+2.1 kB
+
+Text
+12345678
+ 
+ ۮ۸ WX})H wQ^ a7-        , 6      ~Jѿ* -IɖsNN`Q  "' f83  P S   2  JE @B! E 	   n      J`r  ov	L Ǐ | & @ %{  ~>   :  L
+3KV0)  r9  CB B  
+  + 2	  pLi      !)BB   (' , BQO)8 ֮   
+S '  JȠ << f7
+&  K d $  <h ! )   j 6 $$
+   ݼ4]i     n a   $ K    X    
+} u  $0 ,  2@R   & z
+204
+Status: 204 No Content
+Headers
+Access-Control-Allow-Credentials:
+true
+Access-Control-Allow-Origin:
+https://anymusic.ai
+Connection:
+keep-alive
+Date:
+Mon, 09 Mar 2026 06:29:07 GMT
+Request-Context:
+appId=cid-v1:a449a586-8786-487f-a449-dc1b282a2628
+Server:
+nginx
+Vary:
+Origin
+PRO
+PRO
+
+cURL
+
+
+
+With Pro:
+
+
+
+
+
+10
+requests
+
+
+
+
+
+Method
+Status
+Source
+Host
+Path and query
+HTTP/1.1
+POST l . clarity . ms
+Method: POST
+URL
+https://l.clarity.ms/collect
+Headers
+Accept:
+application/x-clarity-gzip
+Accept-Encoding:
+gzip, deflate, br, zstd
+Accept-Language:
+en-US,en;q=0.9
+Connection:
+keep-alive
+Content-Length:
+199
+Cookie:
+MUID=25262E1D334866733050390A324167DD
+Host:
+l.clarity.ms
+Origin:
+https://anymusic.ai
+Referer:
+https://anymusic.ai/
+sec-ch-ua:
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile:
+?0
+sec-ch-ua-platform:
+"Windows"
+Sec-Fetch-Dest:
+empty
+Sec-Fetch-Mode:
+cors
+Sec-Fetch-Site:
+cross-site
+Sec-Fetch-Storage-Access:
+active
+User-Agent:
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+
+199 bytes
+
+Text
+1234
+ 
+M  j 0D eσ   J+      II ;   ߃ B \fx3_t  w Y&H g$)EA 4    \	 iX ^$ ̟A ? Ӻ /Cߏ  z_·n<  @#
+ j  jH  
+ o$ ! s{F  	 R 5¬ 8  D )  , Br   x 0׽i    P51KC     }?)'\ 
+204
+Status: 204 No Content
+Headers
+Access-Control-Allow-Credentials:
+true
+Access-Control-Allow-Origin:
+https://anymusic.ai
+Connection:
+keep-alive
+Date:
+Mon, 09 Mar 2026 06:30:09 GMT
+Request-Context:
+appId=cid-v1:a449a586-8786-487f-a449-dc1b282a2628
+Server:
+nginx
+Vary:
+Origin
+PRO
+PRO
+
+cURL
+
+
+
+With Pro:
+
+
+
+
+
+2
+requests
+
+
+
+
+
+Method
+Status
+Source
+Host
+Path and query
+HTTP/1.1
+POST anymusic . ai
+Method: POST
+URL
+https://anymusic.ai/api/music/generate
+Headers
+Accept:
+*/*
+Accept-Encoding:
+gzip, deflate, br, zstd
+Accept-Language:
+en-US,en;q=0.9
+Connection:
+keep-alive
+Content-Length:
+211
+Content-Type:
+application/json
+Cookie:
+_ga=GA1.1.555948990.1773037545; _ga_9R01R8BKDB=GS2.1.s1773037544$o1$g0$t1773037544$j60$l0$h0; _clck=y23sog%5E2%5Eg47%5E0%5E2259; _clsk=1qq0xvf%5E1773037547366%5E1%5E1%5El.clarity.ms%2Fcollect
+Host:
+anymusic.ai
+Origin:
+https://anymusic.ai
+Referer:
+https://anymusic.ai/
+sec-ch-ua:
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile:
+?0
+sec-ch-ua-platform:
+"Windows"
+Sec-Fetch-Dest:
+empty
+Sec-Fetch-Mode:
+cors
+Sec-Fetch-Site:
+same-origin
+User-Agent:
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+
+211 bytes
+
+JSON
+1234567
+{
+  "type": "text-to-song",
+  "prompt": "Bedroom R&B with minimal beats and intimate vocals, evening atmosphere, telling about missing someone and longing for them to come",
+  "genre": "R&B",
+  "quantity": 1,
+  "is_private": false
+}
+PRO
+PRO
+
+cURL
+
+
+
+With Pro:
+
+
+{
+  "type": "text-to-song",
+  "prompt": "Bedroom R&B with minimal beats and intimate vocals, evening atmosphere, telling about missing someone and longing for them to come",
+  "genre": "R&B",
+  "quantity": 1,
+  "is_private": false
+}
+
+
+
+
+3
+requests
+
+
+
+
+
+Method
+Status
+Source
+Host
+Path and query
+HTTP/1.1
+POST plausible . io
+Method: POST
+URL
+https://plausible.io/api/event
+Headers
+Accept:
+*/*
+Accept-Encoding:
+gzip, deflate, br, zstd
+Accept-Language:
+en-US,en;q=0.9
+Connection:
+keep-alive
+Content-Length:
+88
+Content-Type:
+text/plain
+Host:
+plausible.io
+Origin:
+https://anymusic.ai
+Referer:
+https://anymusic.ai/
+sec-ch-ua:
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile:
+?0
+sec-ch-ua-platform:
+"Windows"
+Sec-Fetch-Dest:
+empty
+Sec-Fetch-Mode:
+cors
+Sec-Fetch-Site:
+cross-site
+User-Agent:
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+
+88 bytes
+
+JSON
+12345678
+{
+  "n": "engagement",
+  "sd": 100,
+  "d": "anymusic.ai",
+  "u": "https://anymusic.ai/",
+  "e": 4382,
+  "v": 33
+}
+202
+Status: 202 Accepted
+Headers
+Accept-CH:
+Sec-CH-UA-Platform, Sec-CH-UA
+Access-Control-Allow-Credentials:
+true
+Access-Control-Allow-Origin:
+*
+application:
+127.0.0.1
+Cache-Control:
+must-revalidate, max-age=0, private
+CDN-CachedAt:
+03/09/2026 06:31:48
+CDN-EdgeStorageId:
+1345
+CDN-ProxyVer:
+1.43
+CDN-PullZone:
+682664
+CDN-RequestCountryCode:
+PK
+CDN-RequestId:
+97c42ef4de1c5072d6a7b81e904a2795
+CDN-RequestPullCode:
+202
+CDN-RequestPullSuccess:
+True
+CDN-RequestTime:
+0
+Connection:
+keep-alive
+Content-Length:
+2
+Content-Type:
+text/plain; charset=utf-8
+Date:
+Mon, 09 Mar 2026 06:31:48 GMT
+permissions-policy:
+interest-cohort=()
+Server:
+BunnyCDN-PK1-1345
+Via:
+1.1 Caddy
+x-plausible-dropped:
+1
+X-Request-ID:
+GJsYlX6M-t09I1ATmF6B
+
+
+2 bytes
+
+Text
+1
+ok
+PRO
+PRO
+
+cURL
+
+
+
+With Pro:
+
+
+
+
+{
+  "n": "engagement",
+  "sd": 100,
+  "d": "anymusic.ai",
+  "u": "https://anymusic.ai/",
+  "e": 4382,
+  "v": 33
+}
+
+
+
+
+
+3
+requests
+
+
+
+
+
+Method
+Status
+Source
+Host
+Path and query
+HTTP/1.1
+POST l . clarity . ms
+Method: POST
+URL
+https://l.clarity.ms/collect
+Headers
+Accept:
+application/x-clarity-gzip
+Accept-Encoding:
+gzip, deflate, br, zstd
+Accept-Language:
+en-US,en;q=0.9
+Connection:
+keep-alive
+Content-Length:
+1871
+Cookie:
+MUID=25262E1D334866733050390A324167DD
+Host:
+l.clarity.ms
+Origin:
+https://anymusic.ai
+Referer:
+https://anymusic.ai/
+sec-ch-ua:
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile:
+?0
+sec-ch-ua-platform:
+"Windows"
+Sec-Fetch-Dest:
+empty
+Sec-Fetch-Mode:
+cors
+Sec-Fetch-Site:
+cross-site
+Sec-Fetch-Storage-Access:
+active
+User-Agent:
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+
+1.9 kB
+
+Text
+12345678
+ 
+ XMo  + n  B _   . nn & B   r$ٱS  ?P -:  E  8 :sxHI       f 0  % p k    m   2`g M b   ?   v <><    l Y y`3`9{|~ J)mAq3 Z    \HB +%(e j @  8\  .d` 2< 
+  @$     S,iAZ 9H ! w 2'@ 
+EW@[
+(mt/׻  a/T " @ @ \_ kmA\Ɓ #  ,A a%h奇 z*  
+
+204
+Status: 204 No Content
+Headers
+Access-Control-Allow-Credentials:
+true
+Access-Control-Allow-Origin:
+https://anymusic.ai
+Connection:
+keep-alive
+Date:
+Mon, 09 Mar 2026 06:32:01 GMT
+Request-Context:
+appId=cid-v1:a449a586-8786-487f-a449-dc1b282a2628
+Server:
+nginx
+Vary:
+Origin
+PRO
+PRO
+
+cURL
+
+
+
+With Pro:
+
+
+
+
+ 
+
+
+
+4
+requests
+
+
+
+
+
+Method
+Status
+Source
+Host
+Path and query
+HTTP/1.1
+POST plausible . io
+Method: POST
+URL
+https://plausible.io/api/event
+Headers
+Accept:
+*/*
+Accept-Encoding:
+gzip, deflate, br, zstd
+Accept-Language:
+en-US,en;q=0.9
+Connection:
+keep-alive
+Content-Length:
+88
+Content-Type:
+text/plain
+Host:
+plausible.io
+Origin:
+https://anymusic.ai
+Referer:
+https://anymusic.ai/
+sec-ch-ua:
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile:
+?0
+sec-ch-ua-platform:
+"Windows"
+Sec-Fetch-Dest:
+empty
+Sec-Fetch-Mode:
+cors
+Sec-Fetch-Site:
+cross-site
+User-Agent:
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+
+88 bytes
+
+JSON
+12345678
+{
+  "n": "engagement",
+  "sd": 100,
+  "d": "anymusic.ai",
+  "u": "https://anymusic.ai/",
+  "e": 3580,
+  "v": 33
+}
+202
+Status: 202 Accepted
+Headers
+Accept-CH:
+Sec-CH-UA-Platform, Sec-CH-UA
+Access-Control-Allow-Credentials:
+true
+Access-Control-Allow-Origin:
+*
+application:
+127.0.0.1
+Cache-Control:
+must-revalidate, max-age=0, private
+CDN-CachedAt:
+03/09/2026 06:32:50
+CDN-EdgeStorageId:
+1345
+CDN-ProxyVer:
+1.43
+CDN-PullZone:
+682664
+CDN-RequestCountryCode:
+PK
+CDN-RequestId:
+96774a441c8c3933045caffe1dbecf78
+CDN-RequestPullCode:
+202
+CDN-RequestPullSuccess:
+True
+CDN-RequestTime:
+0
+Connection:
+keep-alive
+Content-Length:
+2
+Content-Type:
+text/plain; charset=utf-8
+Date:
+Mon, 09 Mar 2026 06:32:50 GMT
+permissions-policy:
+interest-cohort=()
+Server:
+BunnyCDN-PK1-1345
+Via:
+1.1 Caddy
+x-plausible-dropped:
+1
+X-Request-ID:
+GJsYo-i7idtY243eJ60E
+
+
+2 bytes
+
+Text
+1
+ok
+PRO
+PRO
+
+cURL
+
+
+
+With Pro:
+
+
+
+
+{
+  "n": "engagement",
+  "sd": 100,
+  "d": "anymusic.ai",
+  "u": "https://anymusic.ai/",
+  "e": 3580,
+  "v": 33
+}
+
+
+
+
+
+5
+requests
+
+
+
+
+
+Method
+Status
+Source
+Host
+Path and query
+HTTP/1.1
+POST l . clarity . ms
+Method: POST
+URL
+https://l.clarity.ms/collect
+Headers
+Accept:
+application/x-clarity-gzip
+Accept-Encoding:
+gzip, deflate, br, zstd
+Accept-Language:
+en-US,en;q=0.9
+Connection:
+keep-alive
+Content-Length:
+291
+Cookie:
+MUID=25262E1D334866733050390A324167DD
+Host:
+l.clarity.ms
+Origin:
+https://anymusic.ai
+Referer:
+https://anymusic.ai/
+sec-ch-ua:
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile:
+?0
+sec-ch-ua-platform:
+"Windows"
+Sec-Fetch-Dest:
+empty
+Sec-Fetch-Mode:
+cors
+Sec-Fetch-Site:
+cross-site
+Sec-Fetch-Storage-Access:
+active
+User-Agent:
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+
+291 bytes
+
+Text
+123
+ 
+M  n 0   
+ i   (
+ J Z    {e  _?f    6] U  $p@  2  H  ~  > sBz   	  W   '0 9  v 6    8߇ n = S  M  3  qd2 =:  8  Tc b 虄  V  j  / 3d    b :  n2A        ׎*
+Px #/ rx  /  1V L 5 ڝ^  Zn/>Of Ж  ]   Ջ 8 , 0 Z T 	! \j   tj  op A  q   q  5-
+204
+PRO
+PRO
+
+cURL
+
+
+
+With Pro:
+
+
+
+
+ 
+
+
+
+
+6
+requests
+
+
+
+
+
+Method
+Status
+Source
+Host
+Path and query
+HTTP/1.1
+POST l . clarity . ms
+Method: POST
+URL
+https://l.clarity.ms/collect
+Headers
+Accept:
+application/x-clarity-gzip
+Accept-Encoding:
+gzip, deflate, br, zstd
+Accept-Language:
+en-US,en;q=0.9
+Connection:
+keep-alive
+Content-Length:
+211
+Cookie:
+MUID=25262E1D334866733050390A324167DD
+Host:
+l.clarity.ms
+Origin:
+https://anymusic.ai
+Referer:
+https://anymusic.ai/
+sec-ch-ua:
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile:
+?0
+sec-ch-ua-platform:
+"Windows"
+Sec-Fetch-Dest:
+empty
+Sec-Fetch-Mode:
+cors
+Sec-Fetch-Site:
+cross-site
+Sec-Fetch-Storage-Access:
+active
+User-Agent:
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+
+211 bytes
+
+Text
+12
+ 
+M Aj @E  Ǒ4  W1^ P7)IZc Ԕ޽ؤ h     M/ vč7V	 )  G8h  :   + VM  + d   s$x?:-    m       A ] K \` S	 ?Ȣ    ts;=R u  =FΊj &\   Y & 'w,Z  JD}RUaT3X- Tn  e
+  `(4  J   Cŉ8
+204
+PRO
+PRO
+
+cURL
+
+
+
+With Pro:
+
+
+
+
+
+
+ 
+
+
+
+8
+requests
+
+
+
+
+
+Method
+Status
+Source
+Host
+Path and query
+HTTP/1.1
+POST plausible . io
+Method: POST
+URL
+https://plausible.io/api/event
+Headers
+Accept:
+*/*
+Accept-Encoding:
+gzip, deflate, br, zstd
+Accept-Language:
+en-US,en;q=0.9
+Connection:
+keep-alive
+Content-Length:
+89
+Content-Type:
+text/plain
+Host:
+plausible.io
+Origin:
+https://anymusic.ai
+Referer:
+https://anymusic.ai/
+sec-ch-ua:
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile:
+?0
+sec-ch-ua-platform:
+"Windows"
+Sec-Fetch-Dest:
+empty
+Sec-Fetch-Mode:
+cors
+Sec-Fetch-Site:
+cross-site
+User-Agent:
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+
+89 bytes
+
+JSON
+12345678
+{
+  "n": "engagement",
+  "sd": 100,
+  "d": "anymusic.ai",
+  "u": "https://anymusic.ai/",
+  "e": 14733,
+  "v": 33
+}
+202
+
+
+2 bytes
+
+Text
+1
+ok
+PRO
+PRO
+
+cURL
+
+
+
+With Pro:
+
+
+
+
+{
+  "n": "engagement",
+  "sd": 100,
+  "d": "anymusic.ai",
+  "u": "https://anymusic.ai/",
+  "e": 14733,
+  "v": 33
+}
+
+
+
+
+
+
+9
+requests
+
+
+
+
+
+Method
+Status
+Source
+Host
+Path and query
+HTTP/1.1
+POST l . clarity . ms
+Method: POST
+URL
+https://l.clarity.ms/collect
+Headers
+Accept:
+application/x-clarity-gzip
+Accept-Encoding:
+gzip, deflate, br, zstd
+Accept-Language:
+en-US,en;q=0.9
+Connection:
+keep-alive
+Content-Length:
+221
+Cookie:
+MUID=25262E1D334866733050390A324167DD
+Host:
+l.clarity.ms
+Origin:
+https://anymusic.ai
+Referer:
+https://anymusic.ai/
+sec-ch-ua:
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile:
+?0
+sec-ch-ua-platform:
+"Windows"
+Sec-Fetch-Dest:
+empty
+Sec-Fetch-Mode:
+cors
+Sec-Fetch-Site:
+cross-site
+Sec-Fetch-Storage-Access:
+active
+User-Agent:
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+
+221 bytes
+
+Text
+123
+ 
+E An @лx  =  *  B *I  UQջG@$䍟  t  %   L zd.HA 0    9 	 H  >ƑBoC y       9]OU   Դ  1;ĐX whM  q ] ƻbq U Vޒ      0 ca 
+ 9 #4YI h V   8 L 
+  R ,   `9m  x nk5	  EX  ]   r gJ
+204
+PRO
+PRO
+
+cURL
+
+
+
+With Pro:
+
+
+
+
+ 
+
+
+10
+requests
+
+
+
+
+
+Method
+Status
+Source
+Host
+Path and query
+HTTP/1.1
+GET anymusic . ai
+Method: GET
+URL
+https://anymusic.ai/images/covers/rnb.svg
+Headers
+Accept:
+image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8
+Accept-Encoding:
+gzip, deflate, br, zstd
+Accept-Language:
+en-US,en;q=0.9
+Connection:
+keep-alive
+Cookie:
+_ga=GA1.1.555948990.1773037545; _ga_9R01R8BKDB=GS2.1.s1773037544$o1$g0$t1773037544$j60$l0$h0; _clck=y23sog%5E2%5Eg47%5E0%5E2259; _clsk=1qq0xvf%5E1773037547366%5E1%5E1%5El.clarity.ms%2Fcollect
+Host:
+anymusic.ai
+Referer:
+https://anymusic.ai/
+sec-ch-ua:
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile:
+?0
+sec-ch-ua-platform:
+"Windows"
+Sec-Fetch-Dest:
+image
+Sec-Fetch-Mode:
+no-cors
+Sec-Fetch-Site:
+same-origin
+User-Agent:
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+200
+
+
+1.2 kB
+
+Image
+
+PRO
+PRO
+
+cURL
+
+
+
+With Pro:
+
+
+
+
+10
+requests
+
+
+
+
+
+Method
+Status
+Source
+Host
+Path and query
+HTTP/1.1
+POST l . clarity . ms
+Method: POST
+URL
+https://l.clarity.ms/collect
+Headers
+Accept:
+application/x-clarity-gzip
+Accept-Encoding:
+gzip, deflate, br, zstd
+Accept-Language:
+en-US,en;q=0.9
+Connection:
+keep-alive
+Content-Length:
+2181
+Cookie:
+MUID=25262E1D334866733050390A324167DD
+Host:
+l.clarity.ms
+Origin:
+https://anymusic.ai
+Referer:
+https://anymusic.ai/
+sec-ch-ua:
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile:
+?0
+sec-ch-ua-platform:
+"Windows"
+Sec-Fetch-Dest:
+empty
+Sec-Fetch-Mode:
+cors
+Sec-Fetch-Site:
+cross-site
+Sec-Fetch-Storage-Access:
+active
+User-Agent:
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+
+2.2 kB
+
+Text
+12345678
+ 
+ ] ۸ z) C ( p M   pM b A h 	%*"  E {AR   M  = Ț  p   ? ̗	NEʋRy 1 !-0 0q M}   h &gʬ &0! ?  a @q     |6  s   N+5KV0   r9     
+    
+      ! B f4  _G0 9d%d</   `Xpy  R `  z    z])  @3 A9 rX (Xs  d A ! 9& /&  j > rHxQ    Z
+  	$\   +  p  a  K   Fi    
+y  i &  !)$ Y ` 	   . . TP@R^0 
+
+204
+PRO
+PRO
+
+cURL
+
+
+
+With Pro:
+
+
+
+
+

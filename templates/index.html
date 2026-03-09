@@ -3,8 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>musichero.ai Generator</title>
-  <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+  <title>anymusic.ai Generator</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -52,13 +51,13 @@
     /* ── Layout ── */
     .layout {
       display: grid;
-      grid-template-columns: 420px 1fr;
+      grid-template-columns: 440px 1fr;
       gap: 22px;
       max-width: 1160px;
       margin: 26px auto;
       padding: 0 22px;
     }
-    @media (max-width: 820px) { .layout { grid-template-columns: 1fr; } }
+    @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
 
     /* ── Cards ── */
     .card {
@@ -66,32 +65,46 @@
       border: 1px solid var(--border);
       border-radius: var(--r);
       padding: 22px;
+      margin-bottom: 18px;
     }
+    .card:last-child { margin-bottom: 0; }
     .card-title {
       font-size: 11px; font-weight: 700;
       text-transform: uppercase; letter-spacing: 1.2px;
       color: var(--muted); margin-bottom: 18px;
     }
 
-    /* ── Form ── */
+    /* ── Form fields ── */
     label {
       display: block; font-size: 13px;
-      color: var(--muted); margin-bottom: 6px; margin-top: 16px;
+      color: var(--muted); margin-bottom: 6px; margin-top: 14px;
     }
     label:first-of-type { margin-top: 0; }
-    input[type="text"], textarea {
+    input[type="text"], textarea, select {
       width: 100%;
       background: #0e0e20;
       border: 1px solid var(--border);
       border-radius: 8px;
       color: var(--text); font-size: 14px;
-      padding: 10px 12px; outline: none; resize: vertical;
+      padding: 10px 12px; outline: none;
       transition: border-color .2s;
+      appearance: none;
     }
-    input[type="text"]:focus, textarea:focus { border-color: var(--accent2); }
-    textarea { min-height: 80px; }
-    #lyricsInput { min-height: 120px; font-family: monospace; font-size: 13px; }
+    select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238b8ba8' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 34px;
+      cursor: pointer;
+    }
+    input[type="text"]:focus, textarea:focus, select:focus { border-color: var(--accent2); }
+    textarea { min-height: 80px; resize: vertical; }
+    #lyricsInput { min-height: 110px; font-family: monospace; font-size: 13px; }
+    select option { background: #131324; color: var(--text); }
 
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    /* ── Mode tabs ── */
     .mode-tabs {
       display: flex; background: #0e0e20;
       border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
@@ -103,6 +116,51 @@
     }
     .mode-tabs button.active { background: var(--accent); color: #fff; }
 
+    /* ── Cookie settings ── */
+    .cookie-bar {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; padding: 10px 14px;
+      background: #0e0e20; border: 1px solid var(--border);
+      border-radius: 8px; margin-bottom: 16px; cursor: pointer;
+      user-select: none;
+    }
+    .cookie-bar:hover { border-color: var(--accent2); }
+    .cookie-dot {
+      width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+      background: var(--yellow);
+    }
+    .cookie-dot.set { background: var(--green); }
+    .cookie-bar-label { flex: 1; }
+    .cookie-bar-arrow { color: var(--muted); font-size: 11px; }
+
+    .cookie-panel {
+      display: none; background: #0a0a1c;
+      border: 1px solid var(--border); border-radius: 10px;
+      padding: 16px; margin-bottom: 16px;
+    }
+    .cookie-panel.open { display: block; }
+
+    .cookie-panel p {
+      font-size: 12px; color: var(--muted); line-height: 1.6; margin-bottom: 10px;
+    }
+    .cookie-panel textarea {
+      min-height: 64px; font-family: monospace; font-size: 12px;
+    }
+    .btn-save-cookie {
+      margin-top: 10px; background: var(--accent);
+      border: none; border-radius: 7px;
+      color: #fff; font-size: 13px; font-weight: 600;
+      padding: 8px 18px; cursor: pointer;
+      transition: opacity .2s;
+    }
+    .btn-save-cookie:hover { opacity: .85; }
+    .cookie-saved-msg {
+      margin-left: 10px; font-size: 12px; color: var(--green);
+      opacity: 0; transition: opacity .3s;
+    }
+    .cookie-saved-msg.show { opacity: 1; }
+
+    /* ── Generate button ── */
     #generateBtn {
       width: 100%; margin-top: 20px;
       background: linear-gradient(135deg, var(--accent), var(--accent2));
@@ -114,57 +172,6 @@
     }
     #generateBtn:hover:not(:disabled) { opacity: .9; transform: translateY(-1px); }
     #generateBtn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
-
-    /* ── Captcha Modal ── */
-    .modal-overlay {
-      display: none;
-      position: fixed; inset: 0; z-index: 999;
-      background: rgba(0,0,0,.75);
-      backdrop-filter: blur(4px);
-      align-items: center; justify-content: center;
-    }
-    .modal-overlay.open { display: flex; }
-
-    .modal-box {
-      background: #1a1a32;
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 32px 28px;
-      width: 340px;
-      text-align: center;
-      box-shadow: 0 24px 60px rgba(0,0,0,.6);
-      animation: popIn .2s ease;
-    }
-    @keyframes popIn {
-      from { transform: scale(.92); opacity: 0; }
-      to   { transform: scale(1);   opacity: 1; }
-    }
-
-    .modal-icon { font-size: 36px; margin-bottom: 14px; }
-    .modal-title {
-      font-size: 17px; font-weight: 700; margin-bottom: 6px;
-    }
-    .modal-sub {
-      font-size: 13px; color: var(--muted); margin-bottom: 22px; line-height: 1.5;
-    }
-
-    #captchaWidget {
-      display: flex; justify-content: center; margin-bottom: 16px;
-      min-height: 78px;
-    }
-
-    .modal-status {
-      font-size: 13px; color: var(--muted); min-height: 20px;
-    }
-    .modal-status.ok    { color: var(--green); }
-    .modal-status.error { color: var(--red); }
-
-    .modal-cancel {
-      margin-top: 16px; background: none; border: none;
-      color: var(--muted); font-size: 13px; cursor: pointer;
-      text-decoration: underline;
-    }
-    .modal-cancel:hover { color: var(--text); }
 
     /* ── Jobs panel ── */
     .jobs-empty {
@@ -221,8 +228,8 @@
       max-height: 180px; overflow-y: auto; line-height: 1.65;
     }
     .log-line { white-space: pre-wrap; word-break: break-all; }
+    .log-gen    { color: #fcd34d; }
     .log-poll   { color: var(--blue); }
-    .log-create { color: #fcd34d; }
     .log-ok     { color: var(--green); font-weight: 600; }
     .log-error  { color: var(--red); }
 
@@ -247,8 +254,8 @@
 <header>
   <div class="logo">🎵</div>
   <div>
-    <h1>musichero.ai Generator</h1>
-    <p>Generate AI music — just describe your song and solve the captcha</p>
+    <h1>anymusic.ai Generator</h1>
+    <p>Generate AI music — no captcha required</p>
   </div>
 </header>
 
@@ -256,6 +263,34 @@
 
   <!-- ═══ LEFT: FORM ═══ -->
   <div>
+
+    <!-- Cookie Settings -->
+    <div class="card">
+      <div class="card-title">Session Settings</div>
+
+      <div class="cookie-bar" onclick="toggleCookiePanel()" id="cookieBar">
+        <span class="cookie-dot" id="cookieDot"></span>
+        <span class="cookie-bar-label" id="cookieBarLabel">Loading cookie status...</span>
+        <span class="cookie-bar-arrow" id="cookieArrow">▼</span>
+      </div>
+
+      <div class="cookie-panel" id="cookiePanel">
+        <p>
+          Open <strong>anymusic.ai</strong> in your browser, open DevTools
+          (F12) → Network tab → click any request → copy the full
+          <strong>Cookie</strong> header value and paste it below.
+        </p>
+        <label for="cookieInput">Cookie string</label>
+        <textarea id="cookieInput"
+          placeholder="_ga=GA1.1.xxx...; _ga_9R01R8BKDB=...; ..."></textarea>
+        <div style="display:flex; align-items:center; margin-top:10px;">
+          <button class="btn-save-cookie" onclick="saveCookie()">Save Cookie</button>
+          <span class="cookie-saved-msg" id="cookieSavedMsg">Saved!</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Song Settings -->
     <div class="card">
       <div class="card-title">Song Settings</div>
 
@@ -265,10 +300,21 @@
         <button id="btnCustom" onclick="setMode('custom')">Custom</button>
       </div>
 
-      <label for="promptInput">Style / Mood</label>
-      <textarea id="promptInput"
-        placeholder="e.g. Upbeat electronic pop with dreamy synths and female vocals"></textarea>
+      <!-- Simple mode -->
+      <div id="simpleFields">
+        <label for="promptInput">Describe your song</label>
+        <textarea id="promptInput"
+          placeholder="e.g. Upbeat electronic pop with dreamy synths and female vocals"></textarea>
 
+        <label for="genreSelect">Genre</label>
+        <select id="genreSelect">
+          {% for g in genres %}
+          <option value="{{ g }}">{{ g }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Custom mode -->
       <div id="customFields" style="display:none">
         <label for="titleInput">Song Title</label>
         <input type="text" id="titleInput" placeholder="My Song" />
@@ -276,12 +322,39 @@
         <label for="lyricsInput">Lyrics</label>
         <textarea id="lyricsInput"
           placeholder="[Verse 1]&#10;Your lyrics here...&#10;&#10;[Chorus]&#10;..."></textarea>
+
+        <div class="row2">
+          <div>
+            <label for="styleSelect">Style</label>
+            <select id="styleSelect">
+              {% for s in styles %}
+              <option value="{{ s }}">{{ s }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="moodSelect">Mood</label>
+            <select id="moodSelect">
+              {% for m in moods %}
+              <option value="{{ m }}">{{ m }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <label for="scenarioSelect">Scenario</label>
+        <select id="scenarioSelect">
+          {% for sc in scenarios %}
+          <option value="{{ sc }}">{{ sc }}</option>
+          {% endfor %}
+        </select>
       </div>
 
       <button id="generateBtn" onclick="onGenerate()">
         ✨ Generate Song
       </button>
     </div>
+
   </div>
 
   <!-- ═══ RIGHT: JOBS ═══ -->
@@ -299,125 +372,90 @@
 
 </div>
 
-<!-- ═══ CAPTCHA MODAL ═══ -->
-<div class="modal-overlay" id="captchaModal">
-  <div class="modal-box">
-    <div class="modal-icon">🔐</div>
-    <div class="modal-title">Verify you are human</div>
-    <div class="modal-sub">Solve the captcha below — song generation will start automatically when done.</div>
-
-    <div id="captchaWidget"></div>
-
-    <div class="modal-status" id="modalStatus"></div>
-    <button class="modal-cancel" onclick="closeModal()">Cancel</button>
-  </div>
-</div>
-
 <script>
-  const SITEKEY = '6520ce9c-a8b2-4cbe-b698-687e90448dec';
   let mode = 'simple';
-  let captchaWidgetId = null;
-  let pendingFormData = null;
+
+  // ── Init: load cookie status ──
+  async function loadCookieStatus() {
+    try {
+      const r = await fetch('/api/cookie-status');
+      const d = await r.json();
+      updateCookieDot(d.has_cookie);
+    } catch (_) {}
+  }
+
+  function updateCookieDot(hasIt) {
+    const dot   = document.getElementById('cookieDot');
+    const label = document.getElementById('cookieBarLabel');
+    if (hasIt) {
+      dot.classList.add('set');
+      label.textContent = 'Session cookie set — ready to generate';
+    } else {
+      dot.classList.remove('set');
+      label.textContent = 'No cookie set — click to configure';
+    }
+  }
+
+  // ── Cookie panel toggle ──
+  let panelOpen = false;
+  function toggleCookiePanel() {
+    panelOpen = !panelOpen;
+    document.getElementById('cookiePanel').classList.toggle('open', panelOpen);
+    document.getElementById('cookieArrow').textContent = panelOpen ? '▲' : '▼';
+  }
+
+  async function saveCookie() {
+    const val = document.getElementById('cookieInput').value.trim();
+    try {
+      const r = await fetch('/api/set-cookie', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cookie: val }),
+      });
+      const d = await r.json();
+      updateCookieDot(d.has_cookie);
+      const msg = document.getElementById('cookieSavedMsg');
+      msg.classList.add('show');
+      setTimeout(() => msg.classList.remove('show'), 2000);
+      if (d.has_cookie) {
+        panelOpen = false;
+        document.getElementById('cookiePanel').classList.remove('open');
+        document.getElementById('cookieArrow').textContent = '▼';
+      }
+    } catch (e) {
+      alert('Failed to save cookie: ' + e.message);
+    }
+  }
 
   // ── Mode toggle ──
   function setMode(m) {
     mode = m;
     document.getElementById('btnSimple').classList.toggle('active', m === 'simple');
     document.getElementById('btnCustom').classList.toggle('active', m === 'custom');
+    document.getElementById('simpleFields').style.display = m === 'simple' ? 'block' : 'none';
     document.getElementById('customFields').style.display = m === 'custom' ? 'block' : 'none';
   }
 
   // ── Generate button clicked ──
-  function onGenerate() {
+  async function onGenerate() {
     const prompt = document.getElementById('promptInput').value.trim();
-    if (!prompt) {
-      document.getElementById('promptInput').focus();
-      document.getElementById('promptInput').style.borderColor = 'var(--red)';
-      setTimeout(() => document.getElementById('promptInput').style.borderColor = '', 1500);
-      return;
+    if (mode === 'simple' && !prompt) {
+      shake('promptInput'); return;
+    }
+    if (mode === 'custom' && !document.getElementById('lyricsInput').value.trim()) {
+      shake('lyricsInput'); return;
     }
 
-    pendingFormData = {
+    const body = {
       mode,
-      prompt,
-      title:  document.getElementById('titleInput').value.trim() || 'Untitled',
-      lyrics: document.getElementById('lyricsInput').value.trim(),
+      prompt:   mode === 'simple' ? prompt : document.getElementById('promptInput').value.trim(),
+      genre:    document.getElementById('genreSelect').value,
+      title:    document.getElementById('titleInput').value.trim() || 'Untitled',
+      lyrics:   document.getElementById('lyricsInput').value.trim(),
+      style:    document.getElementById('styleSelect').value,
+      mood:     document.getElementById('moodSelect').value,
+      scenario: document.getElementById('scenarioSelect').value,
     };
-
-    openModal();
-  }
-
-  // ── Modal control ──
-  function openModal() {
-    document.getElementById('captchaModal').classList.add('open');
-    document.getElementById('modalStatus').textContent = '';
-    document.getElementById('modalStatus').className = 'modal-status';
-
-    // Render hCaptcha widget once API is loaded
-    renderCaptcha();
-  }
-
-  function closeModal() {
-    document.getElementById('captchaModal').classList.remove('open');
-    pendingFormData = null;
-    if (captchaWidgetId !== null && window.hcaptcha) {
-      try { hcaptcha.reset(captchaWidgetId); } catch(_) {}
-    }
-  }
-
-  function renderCaptcha() {
-    const container = document.getElementById('captchaWidget');
-    container.innerHTML = '';
-
-    if (window.hcaptcha) {
-      captchaWidgetId = hcaptcha.render(container, {
-        sitekey:  SITEKEY,
-        theme:    'dark',
-        callback: onCaptchaSolved,
-        'error-callback': onCaptchaError,
-        'expired-callback': onCaptchaExpired,
-      });
-    } else {
-      // API not loaded yet — wait and retry
-      setTimeout(renderCaptcha, 300);
-    }
-  }
-
-  // ── Captcha callbacks ──
-  function onCaptchaSolved(token) {
-    const status = document.getElementById('modalStatus');
-    status.className = 'modal-status ok';
-    status.textContent = '✓ Captcha solved — submitting...';
-
-    // Small delay so user sees the confirmation
-    setTimeout(() => {
-      closeModal();
-      submitJob(token);
-    }, 600);
-  }
-
-  function onCaptchaError() {
-    const status = document.getElementById('modalStatus');
-    status.className = 'modal-status error';
-    status.textContent = 'Captcha error — please try again.';
-    if (window.hcaptcha && captchaWidgetId !== null) {
-      hcaptcha.reset(captchaWidgetId);
-    }
-  }
-
-  function onCaptchaExpired() {
-    const status = document.getElementById('modalStatus');
-    status.className = 'modal-status error';
-    status.textContent = 'Captcha expired — please solve again.';
-    if (window.hcaptcha && captchaWidgetId !== null) {
-      hcaptcha.reset(captchaWidgetId);
-    }
-  }
-
-  // ── Submit to backend ──
-  async function submitJob(token) {
-    if (!pendingFormData) return;
-    const body = { ...pendingFormData, captcha_token: token };
 
     const btn = document.getElementById('generateBtn');
     btn.disabled = true;
@@ -437,8 +475,14 @@
     } finally {
       btn.disabled = false;
       btn.innerHTML = '✨ Generate Song';
-      pendingFormData = null;
     }
+  }
+
+  function shake(id) {
+    const el = document.getElementById(id);
+    el.style.borderColor = 'var(--red)';
+    el.focus();
+    setTimeout(() => el.style.borderColor = '', 1500);
   }
 
   // ── Job card ──
@@ -451,6 +495,12 @@
       ? (body.title || 'Custom Song')
       : body.prompt.slice(0, 60);
 
+    const metaParts = [
+      'Mode: ' + body.mode,
+      body.mode === 'simple' ? 'Genre: ' + body.genre : 'Style: ' + body.style,
+      new Date().toLocaleTimeString(),
+    ];
+
     const el = document.createElement('div');
     el.className = 'job-item';
     el.id = 'job-' + id;
@@ -458,14 +508,14 @@
       <div class="job-header">
         <div>
           <div class="job-title">${esc(label)}</div>
-          <div class="job-meta">Mode: ${body.mode} &nbsp;·&nbsp; ${new Date().toLocaleTimeString()}</div>
+          <div class="job-meta">${metaParts.map(esc).join(' &nbsp;·&nbsp; ')}</div>
         </div>
         <span class="status-badge badge-queued" id="badge-${id}">Queued</span>
       </div>
       <div class="progress-steps" id="steps-${id}">
-        <span class="step-pill done">✓ Captcha</span>
-        <span class="step-pill" id="step-create-${id}">🎵 Creating</span>
-        <span class="step-pill" id="step-poll-${id}">⏳ Rendering</span>
+        <span class="step-pill" id="step-gen-${id}">🎵 Generating</span>
+        <span class="step-pill" id="step-poll-${id}">⏳ Processing</span>
+        <span class="step-pill" id="step-done-${id}">✓ Done</span>
       </div>
       <div class="log-box" id="log-${id}"></div>
       <div id="result-${id}"></div>
@@ -489,12 +539,13 @@
   }
 
   function updateCard(id, data) {
-    const el      = document.getElementById('job-' + id);
-    const badge   = document.getElementById('badge-' + id);
-    const logEl   = document.getElementById('log-' + id);
-    const resEl   = document.getElementById('result-' + id);
-    const createP = document.getElementById('step-create-' + id);
-    const pollP   = document.getElementById('step-poll-' + id);
+    const el     = document.getElementById('job-' + id);
+    const badge  = document.getElementById('badge-' + id);
+    const logEl  = document.getElementById('log-' + id);
+    const resEl  = document.getElementById('result-' + id);
+    const stepG  = document.getElementById('step-gen-' + id);
+    const stepP  = document.getElementById('step-poll-' + id);
+    const stepD  = document.getElementById('step-done-' + id);
 
     if (badge) {
       badge.className = 'status-badge badge-' + data.status;
@@ -502,21 +553,25 @@
     }
     if (el) el.className = 'job-item status-' + data.status;
 
-    const logs = (data.logs || []).join('\n').toLowerCase();
-    const createDone = logs.includes('queued successfully');
-    const pollActive = logs.includes('[poll]') && data.status === 'running';
+    const logsText = (data.logs || []).join('\n').toLowerCase();
+    const genDone  = logsText.includes('[generate]') && logsText.includes('response status');
+    const polling  = logsText.includes('[poll]');
+    const final    = data.status === 'ok';
+    const failed   = ['failed','error','timeout'].includes(data.status);
 
-    if (createP) createP.className = 'step-pill' + (createDone ? ' done' : data.status === 'running' && !createDone ? ' active' : '');
-    if (pollP)   pollP.className   = 'step-pill' + (data.status === 'ok' ? ' done' : pollActive ? ' active' : '');
+    if (stepG) stepG.className = 'step-pill' + (genDone ? ' done' : data.status === 'running' ? ' active' : '');
+    if (stepP) stepP.className = 'step-pill' + (final ? ' done' : polling ? ' active' : '');
+    if (stepD) stepD.className = 'step-pill' + (final ? ' done' : failed ? ' failed' : '');
 
     if (logEl && data.logs) {
       logEl.innerHTML = data.logs.map(line => {
         let cls = 'log-line';
         const l = line.toLowerCase();
-        if (l.includes('[poll]'))   cls += ' log-poll';
-        if (l.includes('[create]')) cls += ' log-create';
-        if (l.includes('ready') || l.includes('✓')) cls += ' log-ok';
-        if (l.includes('fail') || l.includes('error')) cls += ' log-error';
+        if (l.includes('[generate]')) cls += ' log-gen';
+        if (l.includes('[poll]'))     cls += ' log-poll';
+        if (l.includes('[run_job]'))  cls += ' log-poll';
+        if (l.includes('ready') || l.includes('audio url'))  cls += ' log-ok';
+        if (l.includes('fail') || l.includes('error') || l.includes('403') || l.includes('401')) cls += ' log-error';
         return `<div class="${cls}">${esc(line)}</div>`;
       }).join('');
       logEl.scrollTop = logEl.scrollHeight;
@@ -549,6 +604,8 @@
       .replace(/&/g,'&amp;').replace(/</g,'&lt;')
       .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
+
+  loadCookieStatus();
 </script>
 
 </body>

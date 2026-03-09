@@ -1,200 +1,292 @@
 """
-bot_core.py — Shared generation logic for musichero.ai
--------------------------------------------------------
-Used by both the web app (app.py) and the CLI (main.py).
-Accepts a pre-resolved captcha token so captcha solving
-is handled by the caller (web UI or CLI).
+bot_core.py — anymusic.ai generation logic
+-------------------------------------------
+Calls the anymusic.ai API — no captcha required.
+Cookies from the user's browser session are passed with each request.
 """
 from __future__ import annotations
 
-import os
 import time
 import uuid
-import random
 import requests
 from typing import Callable, Optional
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-CREATE_URL       = "https://api.musichero.ai/api/v1/suno/create"
-POLL_URL         = "https://api.musichero.ai/api/v1/suno/pageRecordList?pageNum=1"
+GENERATE_URL = "https://anymusic.ai/api/music/generate"
+LIST_URL     = "https://anymusic.ai/api/music/list"
 
-POLL_INTERVAL_SECONDS = 10
-POLL_TIMEOUT_SECONDS  = 300   # 5 minutes
+POLL_INTERVAL = 8
+POLL_TIMEOUT  = 360   # 6 minutes
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/122.0.0.0 Safari/537.36"
+    "Chrome/145.0.0.0 Safari/537.36"
 )
+
+GENRES = [
+    "Pop", "R&B", "Rock", "Hip-Hop", "Jazz", "Classical",
+    "Electronic", "Country", "Soul", "Lo-fi", "Ambient",
+]
+
+STYLES = ["Classical", "Pop", "Rock", "Jazz", "Electronic", "R&B", "Hip-Hop", "Folk", "Indie", "Soul"]
+MOODS  = ["Romantic", "Happy", "Sad", "Energetic", "Calm", "Mysterious", "Epic", "Melancholic", "Hopeful"]
+SCENARIOS = [
+    "Urban romance", "Late night drive", "Summer vibes", "Heartbreak",
+    "Celebration", "Nostalgia", "Road trip", "Rainy day", "First love",
+]
+
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def fresh_unique_id() -> str:
-    return uuid.uuid4().hex
-
-
-def build_headers(unique_id: str, captcha_token: str) -> dict:
-    return {
+def build_headers(cookie: str) -> dict:
+    h = {
         "User-Agent":   USER_AGENT,
-        "uniqueId":     unique_id,
-        "verify":       captcha_token,
         "Content-Type": "application/json",
-        "Accept":       "application/json, text/plain, */*",
-        "Origin":       "https://musichero.ai",
-        "Referer":      "https://musichero.ai/",
+        "Accept":       "*/*",
+        "Origin":       "https://anymusic.ai",
+        "Referer":      "https://anymusic.ai/",
+        "sec-ch-ua":    '"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"',
+        "sec-ch-ua-mobile":   "?0",
+        "sec-ch-ua-platform": '"Windows"',
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
     }
+    if cookie:
+        h["Cookie"] = cookie
+    return h
+
+
+def _extract_audio(record: dict) -> Optional[str]:
+    for key in ("audioUrl", "audio_url", "audio", "url", "file_url", "fileUrl"):
+        val = record.get(key)
+        if val and isinstance(val, str) and val.startswith("http"):
+            return val
+    return None
 
 
 # ---------------------------------------------------------------------------
-# Core API calls
+# Core
 # ---------------------------------------------------------------------------
 
 def create_song(
     session: requests.Session,
-    captcha_token: str,
+    cookie: str,
     mode: str,
     prompt: str,
+    genre: str = "Pop",
     title: str = "Untitled",
     lyrics: str = "",
+    style: str = "Pop",
+    mood: str = "Happy",
+    scenario: str = "Urban romance",
     log: Callable[[str], None] = print,
-) -> bool:
+) -> Optional[dict]:
     """
-    POST to /create to queue song generation.
-    Returns True on success, False on failure.
+    POST to /api/music/generate.
+    Returns the parsed JSON response body, or None on failure.
     """
-    unique_id = fresh_unique_id()
-    log(f"[create] Submitting — mode={mode} uniqueId={unique_id}")
-
-    headers = build_headers(unique_id, captcha_token)
+    headers = build_headers(cookie)
 
     if mode == "simple":
-        payload = {"prompt": prompt, "customMode": False}
+        payload = {
+            "type":       "text-to-song",
+            "prompt":     prompt,
+            "genre":      genre,
+            "quantity":   1,
+            "is_private": False,
+        }
     else:
         payload = {
-            "prompt":     prompt,
-            "mv":         lyrics,
+            "type":       "lyrics-to-song",
+            "lyrics":     lyrics,
             "title":      title,
-            "customMode": True,
+            "styles": {
+                "style":    [style],
+                "mood":     [mood],
+                "scenario": [scenario],
+            },
+            "quantity":   1,
+            "is_private": False,
         }
 
+    log(f"[generate] Submitting — mode={mode}")
     try:
-        resp = session.post(CREATE_URL, json=payload, headers=headers, timeout=30)
+        resp = session.post(GENERATE_URL, json=payload, headers=headers, timeout=120)
+    except requests.Timeout:
+        log("[generate] Request timed out — the server took too long to respond.")
+        return None
     except requests.RequestException as exc:
-        log(f"[create] Network error: {exc}")
-        return False
+        log(f"[generate] Network error: {exc}")
+        return None
 
-    if resp.status_code == 200:
-        log("[create] Song creation queued successfully.")
-        return True
+    log(f"[generate] Response status: {resp.status_code}")
 
+    if resp.status_code == 401:
+        log("[generate] 401 Unauthorized — your session cookie may be expired or missing.")
+        return None
     if resp.status_code == 403:
-        log(f"[create] 403 Forbidden — captcha token rejected or expired.")
-        return False
-
+        log("[generate] 403 Forbidden — access denied.")
+        return None
     if resp.status_code == 429:
-        log("[create] 429 Too Many Requests — API rate limited.")
-        return False
+        log("[generate] 429 Too Many Requests — rate limited.")
+        return None
+    if resp.status_code != 200:
+        log(f"[generate] Unexpected status {resp.status_code}: {resp.text[:300]}")
+        return None
 
-    log(f"[create] Unexpected status {resp.status_code}: {resp.text[:200]}")
-    return False
+    try:
+        data = resp.json()
+        log(f"[generate] Response: {str(data)[:300]}")
+        return data
+    except Exception:
+        log(f"[generate] Non-JSON response: {resp.text[:300]}")
+        return None
 
 
 def poll_for_result(
     session: requests.Session,
+    cookie: str,
+    task_id: Optional[str] = None,
     log: Callable[[str], None] = print,
-    timeout: int = POLL_TIMEOUT_SECONDS,
 ) -> Optional[str]:
     """
-    Poll pageRecordList until the latest song is finished or timeout.
+    Poll the list endpoint until a finished song appears.
     Returns the audio URL string, or None on timeout/error.
     """
-    headers = {
-        "User-Agent": USER_AGENT,
-        "uniqueId":   fresh_unique_id(),
-        "Accept":     "application/json",
-        "Referer":    "https://musichero.ai/",
-    }
+    headers = build_headers(cookie)
+    headers["Content-Type"] = "application/json"
 
-    deadline = time.time() + timeout
+    deadline = time.time() + POLL_TIMEOUT
     attempt  = 0
 
-    log(f"[poll] Waiting for song to finish (up to {timeout}s) ...")
+    log(f"[poll] Waiting for song to finish (up to {POLL_TIMEOUT}s) ...")
 
     while time.time() < deadline:
         attempt += 1
+        time.sleep(POLL_INTERVAL)
+
         try:
-            resp = session.get(POLL_URL, headers=headers, timeout=30)
+            resp = session.get(LIST_URL, headers=headers, timeout=30)
             resp.raise_for_status()
             data = resp.json()
         except Exception as exc:
             log(f"[poll] Attempt {attempt}: error — {exc}")
-            time.sleep(POLL_INTERVAL_SECONDS)
             continue
 
-        records = data.get("data", {}).get("records", [])
+        log(f"[poll] Attempt {attempt}: raw response: {str(data)[:400]}")
+
+        records = []
+        if isinstance(data, list):
+            records = data
+        elif isinstance(data, dict):
+            for key in ("data", "items", "records", "list", "songs", "results"):
+                val = data.get(key)
+                if isinstance(val, list):
+                    records = val
+                    break
+                if isinstance(val, dict):
+                    for subkey in ("records", "items", "list", "data"):
+                        sub = val.get(subkey)
+                        if isinstance(sub, list):
+                            records = sub
+                            break
+                    if records:
+                        break
+
         if not records:
-            log(f"[poll] Attempt {attempt}: no records yet ...")
-            time.sleep(POLL_INTERVAL_SECONDS)
+            log(f"[poll] Attempt {attempt}: no records yet — raw: {str(data)[:200]}")
             continue
 
-        latest = records[0]
-        status = latest.get("status", "unknown")
-        log(f"[poll] Attempt {attempt}: status = {status}")
+        for rec in records:
+            status = (rec.get("status") or rec.get("state") or "").lower()
+            rec_id = rec.get("id") or rec.get("taskId") or rec.get("task_id")
 
-        if status == "finished":
-            audio_url = latest.get("audioUrl") or latest.get("audio_url")
-            if audio_url:
-                log(f"[poll] Song ready! Audio URL: {audio_url}")
-                return audio_url
-            log("[poll] Status is 'finished' but no audioUrl found.")
-            return None
+            if task_id and rec_id and str(rec_id) != str(task_id):
+                continue
 
-        if status in ("error", "failed"):
-            log(f"[poll] Generation failed with status: {status}")
-            return None
+            log(f"[poll] Attempt {attempt}: id={rec_id} status={status}")
 
-        time.sleep(POLL_INTERVAL_SECONDS)
+            if status in ("finished", "complete", "completed", "done", "success", "succeeded"):
+                audio_url = _extract_audio(rec)
+                if audio_url:
+                    log(f"[poll] Song ready! Audio URL: {audio_url}")
+                    return audio_url
+                log("[poll] Status finished but no audio URL found in record.")
+                return None
+
+            if status in ("error", "failed", "failure"):
+                log(f"[poll] Generation failed: {rec}")
+                return None
+
+        log(f"[poll] Attempt {attempt}: still processing ...")
 
     log("[poll] Timed out waiting for song to finish.")
     return None
 
 
 # ---------------------------------------------------------------------------
-# High-level job runner (used by web app)
+# High-level job runner
 # ---------------------------------------------------------------------------
 
 def run_job(
-    captcha_token: str,
+    cookie: str,
     mode: str,
     prompt: str,
+    genre: str = "Pop",
     title: str = "Untitled",
     lyrics: str = "",
+    style: str = "Pop",
+    mood: str = "Happy",
+    scenario: str = "Urban romance",
     log: Callable[[str], None] = print,
 ) -> dict:
     """
-    Run a full generation job: create + poll.
-    Returns {"status": "ok"|"failed"|"timeout", "audio_url": str|None}.
+    Full generation job: generate + poll.
+    Returns {"status": "ok"|"failed"|"timeout"|"auth_error", "audio_url": str|None}.
     """
     session = requests.Session()
 
-    success = create_song(
+    gen_data = create_song(
         session=session,
-        captcha_token=captcha_token,
+        cookie=cookie,
         mode=mode,
         prompt=prompt,
+        genre=genre,
         title=title,
         lyrics=lyrics,
+        style=style,
+        mood=mood,
+        scenario=scenario,
         log=log,
     )
 
-    if not success:
+    if gen_data is None:
         return {"status": "failed", "audio_url": None}
 
-    audio_url = poll_for_result(session=session, log=log)
+    task_id = None
+    audio_url = None
+
+    if isinstance(gen_data, dict):
+        data_body = gen_data.get("data") or gen_data
+        if isinstance(data_body, list) and data_body:
+            audio_url = _extract_audio(data_body[0])
+            task_id = data_body[0].get("id") or data_body[0].get("taskId")
+        elif isinstance(data_body, dict):
+            audio_url = _extract_audio(data_body)
+            task_id = data_body.get("id") or data_body.get("taskId") or data_body.get("task_id")
+
+    if audio_url:
+        log(f"[run_job] Got audio URL directly from generate response: {audio_url}")
+        return {"status": "ok", "audio_url": audio_url}
+
+    log(f"[run_job] No immediate audio URL — starting polling (task_id={task_id})")
+    audio_url = poll_for_result(session=session, cookie=cookie, task_id=task_id, log=log)
 
     if audio_url:
         return {"status": "ok", "audio_url": audio_url}
