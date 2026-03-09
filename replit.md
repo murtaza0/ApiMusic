@@ -1,101 +1,110 @@
-# anymusic.ai — Production-Ready FastAPI
+# AiMusic API v4 — Production Grade
 
-FastAPI-based REST API that generates AI music via anymusic.ai.
-Deployed on **Railway** (no timeout limits); developed on **Replit**.
+FastAPI REST API deployed on **Railway** (`apimusic-production-ef04.up.railway.app`).
+Generates AI music via **aimusic.so** (Suno-powered).
+
+## Architecture
+
+- **Lyrics** → aimusic.so `/lyrical/create` (unlimited, no auth, pure HTTP)
+- **Song**   → 2captcha Turnstile solver → suno/create directly (no browser needed)
+- **Queue**  → asyncio.Queue with N async workers handles unlimited concurrent users
+- **Identity** → fresh uniqueId (MD5) + full browser fingerprint per request
 
 ## File Structure
 
 | File | Purpose |
 |------|---------|
-| `main.py` | FastAPI app — all routes, spoofing logic, async generation |
-| `requirements.txt` | fastapi, uvicorn, httpx, pydantic |
-| `Procfile` | Railway start command: `uvicorn main:app --host 0.0.0.0 --port $PORT` |
-| `music_outputs/` | Local MP3 downloads (Replit dev only) |
+| `main.py` | FastAPI app v4 — all routes, 2captcha Turnstile, async workers, fingerprinting |
+| `requirements.txt` | fastapi, uvicorn, httpx, selenium, undetected-chromedriver, fake-useragent |
+| `nixpacks.toml` | Railway build: installs chromium + chromedriver system packages |
+| `railway.json` | Railway deploy config |
+| `Procfile` | `uvicorn main:app --host 0.0.0.0 --port $PORT` |
 
 ## API Endpoints
 
 | Route | Method | Description |
 |-------|--------|-------------|
-| `/` | GET | Service info + endpoint map |
+| `/` | GET | Status + queue info |
 | `/health` | GET | Liveness probe |
-| `/connectivity` | GET | Test if anymusic.ai is reachable from this server |
-| `/generate` | POST | Fire 2 parallel requests → returns 2 task_ids |
-| `/status/{task_id}` | GET | Single-check poll; streams audio/mpeg when ready |
-| `/docs` | GET | Auto-generated Swagger UI |
+| `/generate-lyrics` | POST | AI lyrics (no browser, unlimited, ~15s) |
+| `/lyrics/{uuid}` | GET | Poll lyrics status |
+| `/generate-song` | POST | Queue song (auto Turnstile bypass) |
+| `/generate-full` | POST | Lyrics + Song together (auto) |
+| `/task/{id}` | GET | Poll song task status |
+| `/tasks` | GET | List all tasks |
+| `/docs` | GET | Swagger UI |
 
-## POST /generate
+## Key Parameters
 
+### POST /generate-lyrics
 ```json
-{
-  "prompt":   "upbeat Punjabi dhol pop",
-  "genre":    "Pop",
-  "mode":     "text-to-song"
-}
+{ "prompt": "sad love story", "language": "urdu", "style": "ghazal" }
 ```
+Languages: english, urdu, hindi, punjabi, arabic
 
-Lyrics mode adds: `title`, `lyrics`, `style`, `mood`, `scenario`
-
-Response:
+### POST /generate-song
 ```json
-{
-  "ok": true,
-  "variants": [
-    {"task_id": "ready_<b64>",  "status": "ready"},
-    {"task_id": "abc123",       "status": "pending"}
-  ]
-}
+{ "prompt": "...", "style": "pop", "title": "My Song" }
 ```
+Returns `task_id` immediately. Poll `/task/{task_id}` every 5s.
 
-## GET /status/{task_id}
-
-- `ready_<b64>` → decodes CDN URL, fetches and streams `audio/mpeg` immediately
-- real task_id → single poll to anymusic.ai `/api/music/task/{id}`; returns
-  `{"status":"pending"}` or streams audio if done
-
-**Client should retry every 8 s until it receives audio bytes.**
-
-## Variant Logic
-
-`/generate` fires 2 parallel requests using different browser profiles
-(randomised User-Agent + Sec-Ch-Ua + platform). Both run via `asyncio.gather`
-with a 270 s timeout.
-
-On Replit: uses `curl_cffi` with Chrome TLS fingerprinting (impersonate="chrome131").
-On Railway: uses plain `httpx` (curl_cffi not needed — Railway IPs not blocked).
-
-## Cookie / Identity Spoofing
-
-Every request generates fresh `_ga`, `_ga_*`, `_clck`, `_clsk` cookies plus
-randomised `Accept-Language`. `curl_cffi` uses Chrome TLS fingerprints to pass
-bot checks on Replit.
-
-## anymusic.ai API
-
-- Generate: `POST https://anymusic.ai/api/music/generate`
-- Task poll: `GET  https://anymusic.ai/api/music/task/{task_id}`
-- CORS: `Access-Control-Allow-Origin: *`
-- IP policy: Railway IPs allowed; Replit datacenter IPs blocked for POST
-
-## Railway Deployment
-
-1. Push repo to GitHub (`https://github.com/murtaza0/ApiMusic.git`)
-2. railway.app → New Project → Deploy from GitHub → select `ApiMusic`
-3. Railway auto-detects Python + `Procfile` → runs uvicorn on `$PORT`
-4. No env vars required (optional: set `API_KEY` for auth)
-5. No timeout limits — songs generating in 60-120 s work fine
-
-## GitHub Push (from Replit Shell)
-
-```bash
-git remote set-url origin https://YOUR_TOKEN@github.com/murtaza0/ApiMusic.git
-git add -A
-git commit -m "update"
-git push origin main
+### POST /generate-full
+```json
+{ "topic": "summer vibes", "style": "pop", "language": "english" }
 ```
+Generates lyrics then queues song. Returns lyrics + task_id.
 
-Replace `YOUR_TOKEN` with a GitHub Personal Access Token (Settings → Developer settings → Personal access tokens → repo scope).
+## Song Generation — How It Works
 
-## Running Locally (Replit)
+**With TWOCAPTCHA_API_KEY set (recommended):**
+1. Submit Turnstile challenge to 2captcha (~15-30s to solve)
+2. Use returned token + fresh uniqueId to call suno/create API directly
+3. Poll suno/record until audio URLs appear
+4. Cost: ~$0.001 per song (2captcha.com free trial gives $5 = ~5000 songs)
 
-Workflow: `python main.py` → uvicorn on port 5000
-Swagger UI: `https://<replit-url>/docs`
+**Without TWOCAPTCHA_API_KEY (fallback):**
+- Uses headless Selenium + undetected-chromedriver
+- May fail Cloudflare Turnstile check (headless browsers often detected)
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `PORT` | Auto (Railway) | Server port |
+| `TWOCAPTCHA_API_KEY` | **Strongly recommended** | 2captcha API key for Turnstile |
+| `BROWSER_WORKERS` | Optional (default: 10) | Number of async workers |
+| `CHROMIUM_PATH` | Optional | Override Chromium binary path |
+
+## Browser Fingerprinting (per request)
+
+Each request gets a unique identity:
+- Random User-Agent from fake-useragent library
+- Random screen resolution (1920x1080, 1366x768, etc.)
+- Random timezone, language, platform
+- Canvas fingerprint noise (random pixel XOR)
+- WebGL vendor/renderer spoofing
+- Audio fingerprint noise
+- Fake Chrome plugins array
+- Fresh MD5 uniqueId = new guest account on aimusic.so (5 credits each)
+
+## Concurrency
+
+- 10 async workers process tasks from a queue
+- 100K+ concurrent requests → all queued, processed in order
+- Each worker processes tasks independently with its own browser identity
+
+## aimusic.so API Details
+
+- Turnstile sitekey: `0x4AAAAAAAgeJUEUvYlF2CzO`
+- Lyrics create: `POST https://api.aimusic.so/api/v1/lyrical/create`
+- Lyrics status: `GET https://api.aimusic.so/api/v1/lyrical/getLyricsByUuid/{uuid}`
+- Suno create: `POST https://api.aimusic.so/api/v1/suno/create` (needs `verify` header)
+- Suno status: `GET https://api.aimusic.so/api/v1/suno/record/{uuid}`
+- UniqueId: fresh MD5 hex per request = fresh guest account = 5 credits
+
+## Railway Setup
+
+1. Repo: `github.com/murtaza0/ApiMusic.git`
+2. Railway auto-deploys on push
+3. **Set environment variable**: `TWOCAPTCHA_API_KEY` = your 2captcha key
+4. nixpacks.toml installs chromium system packages for Railway
