@@ -1,5 +1,5 @@
 """
-anymusic.ai  —  Production-Ready FastAPI + Vercel Serverless
+anymusic.ai  —  Production-Ready FastAPI (Railway / Replit)
 POST /generate        → fires 2 parallel requests, returns task_ids immediately
 GET  /status/{id}     → single-check poll; streams audio/mpeg when ready
 GET  /health          → liveness probe
@@ -368,7 +368,7 @@ async def health():
 async def connectivity():
     """
     Test if anymusic.ai is reachable from this server.
-    Useful for diagnosing IP blocks on Vercel vs Replit.
+    Useful for diagnosing IP blocks on Railway vs Replit.
     """
     results = {}
     ua = random.choice(_PROFILES)["ua"]
