@@ -1,8 +1,15 @@
 """
-app.py — anymusic.ai Music Generation Web App
------------------------------------------------
+app.py — anymusic.ai Music Generation Web App + REST API
+---------------------------------------------------------
 Flask web server. No captcha required.
 Browser makes API calls client-side → sends audio URL to backend → backend downloads + serves MP3.
+
+Public REST API:
+  POST /v1/generate          — start async generation (returns job_id)
+  GET  /v1/jobs/<id>         — poll job status + results
+  GET  /v1/health            — server health check
+
+Auth (optional): set API_KEY env var → send  Authorization: Bearer <key>
 
 Run:  python app.py
 URL:  http://0.0.0.0:5000
@@ -14,12 +21,16 @@ import re
 import time
 import threading
 import uuid
+from functools import wraps
 from flask import Flask, render_template, request, jsonify, send_from_directory
 
 import bot_core
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "anymusic-session-key-2026")
+
+# Optional API key — if set, all /v1/ routes require  Authorization: Bearer <key>
+_API_KEY: str = os.environ.get("API_KEY", "").strip()
 
 # In-memory job store: job_id -> {status, logs, audio_url, local_url, error}
 _jobs: dict[str, dict] = {}
@@ -178,6 +189,182 @@ def api_notify():
 
     # Download failed — frontend can keep using the original CDN URL
     return jsonify({"ok": False, "error": "Download failed", "local_url": None})
+
+
+# ---------------------------------------------------------------------------
+# REST API — /v1/
+# ---------------------------------------------------------------------------
+
+def _require_api_key(f):
+    """Decorator: if API_KEY is set, enforce  Authorization: Bearer <key>."""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if _API_KEY:
+            auth = request.headers.get("Authorization", "")
+            token = auth.removeprefix("Bearer ").strip()
+            if token != _API_KEY:
+                return jsonify({"error": "Unauthorized — invalid or missing API key"}), 401
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def _v1_run_job_thread(job_id: str, params: dict) -> None:
+    """Background thread for /v1/generate — runs full generate+poll+download pipeline."""
+    def log(msg: str) -> None:
+        with _jobs_lock:
+            _jobs[job_id]["logs"].append(msg)
+
+    with _jobs_lock:
+        _jobs[job_id]["status"] = "running"
+
+    try:
+        result = bot_core.run_job(
+            cookie      = params.get("cookie", ""),
+            mode        = params.get("mode", "text-to-song"),
+            prompt      = params.get("prompt", ""),
+            genre       = params.get("genre", "Pop"),
+            title       = params.get("title", "AI_Track"),
+            lyrics      = params.get("lyrics", ""),
+            style       = params.get("style", "Pop"),
+            mood        = params.get("mood", "Happy"),
+            scenario    = params.get("scenario", "Summer vibes"),
+            quantity    = int(params.get("quantity", 2)),
+            auto_download = True,
+            log         = log,
+        )
+
+        variants = []
+        for v in result.get("variants", []):
+            local_path = v.get("local_path")
+            local_url  = f"/audio/{os.path.basename(local_path)}" if local_path else None
+            variants.append({
+                "cdn_url":   v.get("cdn_url"),
+                "local_url": local_url,
+            })
+
+        with _jobs_lock:
+            _jobs[job_id]["status"]   = result["status"]
+            _jobs[job_id]["variants"] = variants
+            _jobs[job_id]["audio_url"] = result.get("audio_url")
+            _jobs[job_id]["local_url"] = (
+                f"/audio/{os.path.basename(result['local_path'])}"
+                if result.get("local_path") else None
+            )
+
+    except Exception as exc:
+        with _jobs_lock:
+            _jobs[job_id]["status"] = "error"
+            _jobs[job_id]["error"]  = str(exc)
+
+
+@app.route("/v1/health")
+def v1_health():
+    """
+    GET /v1/health
+    Returns server status and version info.
+    """
+    return jsonify({
+        "ok":      True,
+        "service": "anymusic-api",
+        "version": "1.0.0",
+        "auth":    bool(_API_KEY),
+    })
+
+
+@app.route("/v1/generate", methods=["POST"])
+@_require_api_key
+def v1_generate():
+    """
+    POST /v1/generate
+    Start an async music generation job. Returns job_id immediately.
+    Poll GET /v1/jobs/<job_id> for status and results.
+
+    Body (JSON):
+      prompt    string   required  Song description or lyrics
+      mode      string   optional  "text-to-song" (default) | "lyrics-to-song"
+      genre     string   optional  e.g. "Pop", "Qawwali", "Punjabi Folk"
+      quantity  int      optional  Number of variants (default: 2)
+      title     string   optional  Song title (for lyrics mode)
+      lyrics    string   optional  Full lyrics (for lyrics mode)
+      style     string   optional  Music style
+      mood      string   optional  Mood
+      scenario  string   optional  Scenario / vibe
+
+    Response:
+      { "ok": true, "job_id": "...", "status": "queued", "poll_url": "/v1/jobs/..." }
+    """
+    data   = request.get_json(force=True, silent=True) or {}
+    prompt = (data.get("prompt") or "").strip()
+    if not prompt:
+        return jsonify({"ok": False, "error": "prompt is required"}), 400
+
+    quantity = int(data.get("quantity", 2))
+    if quantity < 1 or quantity > 4:
+        return jsonify({"ok": False, "error": "quantity must be 1–4"}), 400
+
+    job_id = uuid.uuid4().hex
+    with _jobs_lock:
+        _jobs[job_id] = {
+            "status":    "queued",
+            "logs":      [],
+            "variants":  [],
+            "audio_url": None,
+            "local_url": None,
+            "error":     None,
+        }
+
+    params = {
+        "prompt":   prompt,
+        "mode":     data.get("mode", "text-to-song"),
+        "genre":    data.get("genre", "Pop"),
+        "title":    data.get("title", "AI_Track"),
+        "lyrics":   data.get("lyrics", ""),
+        "style":    data.get("style", "Pop"),
+        "mood":     data.get("mood", "Happy"),
+        "scenario": data.get("scenario", "Summer vibes"),
+        "quantity": quantity,
+        "cookie":   data.get("cookie", ""),
+    }
+
+    t = threading.Thread(target=_v1_run_job_thread, args=(job_id, params), daemon=True)
+    t.start()
+
+    return jsonify({
+        "ok":       True,
+        "job_id":   job_id,
+        "status":   "queued",
+        "poll_url": f"/v1/jobs/{job_id}",
+    }), 202
+
+
+@app.route("/v1/jobs/<job_id>")
+@_require_api_key
+def v1_job_status(job_id: str):
+    """
+    GET /v1/jobs/<job_id>
+    Poll job status. Keep calling until status is "ok", "failed", "timeout", or "error".
+
+    Response fields:
+      status     string    "queued" | "running" | "ok" | "failed" | "timeout" | "error"
+      variants   array     [{ "cdn_url": "...", "local_url": "/audio/..." }, ...]
+      logs       array     Generation log lines
+      error      string    Error message (only on failure)
+    """
+    with _jobs_lock:
+        job = _jobs.get(job_id)
+    if job is None:
+        return jsonify({"ok": False, "error": "job not found"}), 404
+
+    done = job["status"] in ("ok", "failed", "timeout", "error")
+    return jsonify({
+        "ok":       True,
+        "job_id":   job_id,
+        "status":   job["status"],
+        "done":     done,
+        "variants": job.get("variants", []),
+        "logs":     job.get("logs", []),
+        "error":    job.get("error"),
+    })
 
 
 # ---------------------------------------------------------------------------

@@ -308,6 +308,7 @@ def start_generation(
     style: str = "Classical",
     mood: str = "Romantic",
     scenario: str = "Urban romance",
+    quantity: int = 2,
     log: Callable[[str], None] = print,
 ) -> Optional[str]:
     """
@@ -328,7 +329,7 @@ def start_generation(
             "type":       "text-to-song",
             "prompt":     prompt,
             "genre":      genre,
-            "quantity":   1,
+            "quantity":   quantity,
             "is_private": False,
         }
     else:
@@ -341,7 +342,7 @@ def start_generation(
                 "mood":     [mood],
                 "scenario": [scenario],
             },
-            "quantity":   1,
+            "quantity":   quantity,
             "is_private": False,
         }
 
@@ -432,10 +433,10 @@ def poll_task_status(
     task_id: str,
     cookie: str = "",
     log: Callable[[str], None] = print,
-) -> Optional[str]:
+) -> Optional[list]:
     """
     Poll the task status endpoint every POLL_INTERVAL seconds.
-    Returns audio_url when done, or None on timeout/error.
+    Returns list of audio URLs when done, or None on timeout/error.
     """
     deadline = time.time() + POLL_TIMEOUT
     attempt  = 0
@@ -477,13 +478,14 @@ def poll_task_status(
 
             log(f"[poll] Attempt {attempt}: {url} → {str(data)[:300]}")
 
-            audio_url = _parse_poll_response(data, task_id if not use_list else None)
-            if audio_url is True:
+            result = _parse_poll_response(data, task_id if not use_list else None)
+            if result is True:
                 continue
-            if audio_url is None:
+            if result is None:
                 return None
-            if isinstance(audio_url, str):
-                return audio_url
+            if isinstance(result, list) and result:
+                log(f"[poll] Got {len(result)} audio URL(s)")
+                return result
             break
 
         else:
@@ -497,7 +499,7 @@ def poll_task_status(
 def _parse_poll_response(data, task_id: Optional[str] = None):
     """
     Returns:
-      str       — audio URL (done)
+      list[str] — list of audio URLs (done, at least one ready)
       None      — terminal failure
       True      — still processing, keep polling
     """
@@ -505,7 +507,7 @@ def _parse_poll_response(data, task_id: Optional[str] = None):
     if isinstance(data, list):
         records = data
     elif isinstance(data, dict):
-        for key in ("data", "result", "task", "song", "music"):
+        for key in ("data", "result", "task", "song", "music", "songs", "list"):
             val = data.get(key)
             if isinstance(val, list):
                 records = val
@@ -516,12 +518,10 @@ def _parse_poll_response(data, task_id: Optional[str] = None):
         if not records:
             records = [data]
 
+    urls = []
+    any_pending = False
     for rec in records:
         if not isinstance(rec, dict):
-            continue
-
-        rec_id = str(rec.get("taskId") or rec.get("task_id") or rec.get("id") or "")
-        if task_id and rec_id and rec_id != task_id:
             continue
 
         status = (
@@ -531,12 +531,18 @@ def _parse_poll_response(data, task_id: Optional[str] = None):
         if status in ("success", "finished", "complete", "completed", "done", "succeeded"):
             url = _extract_audio(rec)
             if url:
-                return url
-            return True
+                urls.append(url)
+            else:
+                any_pending = True
+        elif status in ("error", "failed", "failure", "cancelled", "canceled"):
+            pass  # skip failed variants
+        else:
+            any_pending = True
 
-        if status in ("error", "failed", "failure", "cancelled", "canceled"):
-            return None
-
+    if urls:
+        return urls
+    if any_pending:
+        return True
     return True
 
 
@@ -554,13 +560,20 @@ def run_job(
     style: str = "Classical",
     mood: str = "Romantic",
     scenario: str = "Urban romance",
+    quantity: int = 2,
     auto_download: bool = True,
     log: Callable[[str], None] = print,
 ) -> dict:
     """
     Full pipeline: generate → poll → (optional) download.
     Returns:
-      {"status": "ok"|"failed"|"timeout", "audio_url": str|None, "local_path": str|None}
+      {
+        "status":   "ok"|"failed"|"timeout",
+        "variants": [{"cdn_url": str, "local_path": str|None}, ...],
+        # legacy keys kept for backwards compat:
+        "audio_url": str|None,
+        "local_path": str|None,
+      }
     """
     actual_prompt = lyrics if (mode == "lyrics-to-song" and lyrics) else prompt
 
@@ -573,21 +586,33 @@ def run_job(
         style=style,
         mood=mood,
         scenario=scenario,
+        quantity=quantity,
         log=log,
     )
 
     if task_id is None:
-        return {"status": "failed", "audio_url": None, "local_path": None}
+        return {"status": "failed", "variants": [], "audio_url": None, "local_path": None}
 
-    audio_url = poll_task_status(task_id=task_id, cookie=cookie, log=log)
+    audio_urls = poll_task_status(task_id=task_id, cookie=cookie, log=log)
 
-    if not audio_url:
-        return {"status": "timeout", "audio_url": None, "local_path": None}
+    if not audio_urls:
+        return {"status": "timeout", "variants": [], "audio_url": None, "local_path": None}
 
-    local_path = None
-    if auto_download:
-        safe_title = re.sub(r"[^a-z0-9]+", "_", title.lower())[:40]
-        filename = f"{safe_title}_{int(time.time())}.mp3"
-        local_path = download_audio(audio_url, filename=filename, log=log)
+    variants = []
+    safe_title = re.sub(r"[^a-z0-9]+", "_", title.lower())[:40]
+    ts = int(time.time())
+    for i, cdn_url in enumerate(audio_urls):
+        local_path = None
+        if auto_download:
+            filename = f"{safe_title}_v{i+1}_{ts}.mp3"
+            local_path = download_audio(cdn_url, filename=filename, log=log)
+        variants.append({"cdn_url": cdn_url, "local_path": local_path})
 
-    return {"status": "ok", "audio_url": audio_url, "local_path": local_path}
+    first_cdn   = audio_urls[0] if audio_urls else None
+    first_local = variants[0]["local_path"] if variants else None
+    return {
+        "status":     "ok",
+        "variants":   variants,
+        "audio_url":  first_cdn,
+        "local_path": first_local,
+    }
