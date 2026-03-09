@@ -262,8 +262,15 @@ async def _generate_one(req: GenerateRequest, profile: dict) -> dict:
         except Exception:
             raise Exception(f"Non-JSON response (HTTP {status_code}): {resp.text[:200]}")
     else:
-        async with httpx.AsyncClient(timeout=90.0) as client:
-            resp = await client.post(GENERATE_URL, json=payload, headers=headers)
+        try:
+            async with httpx.AsyncClient(timeout=55.0) as client:
+                resp = await client.post(GENERATE_URL, json=payload, headers=headers)
+        except httpx.TimeoutException:
+            raise Exception("anymusic.ai timed out (>55s) — server slow or IP blocked")
+        except httpx.ConnectError as e:
+            raise Exception(f"Cannot connect to anymusic.ai: {type(e).__name__} — IP may be blocked")
+        except Exception as e:
+            raise Exception(f"{type(e).__name__}: {str(e) or 'unknown connection error'}")
         status_code = resp.status_code
         if status_code in (401, 403):
             raise Exception(f"Auth / IP blocked ({status_code}): {resp.text[:200]}")
@@ -355,6 +362,45 @@ async def health():
         "version": "1.0.0",
         "backend": "curl_cffi" if _USE_CURL else "httpx",
     }
+
+
+@app.get("/connectivity")
+async def connectivity():
+    """
+    Test if anymusic.ai is reachable from this server.
+    Useful for diagnosing IP blocks on Vercel vs Replit.
+    """
+    results = {}
+    ua = random.choice(_PROFILES)["ua"]
+    targets = {
+        "anymusic_home":     "https://anymusic.ai/",
+        "anymusic_api_base": "https://anymusic.ai/api/",
+    }
+    if _USE_CURL:
+        for name, url in targets.items():
+            try:
+                async with CurlSession() as s:
+                    r = await s.get(url, headers={"User-Agent": ua},
+                                    impersonate="chrome131", timeout=10)
+                results[name] = {"status": r.status_code, "reachable": True}
+            except Exception as e:
+                results[name] = {"status": None, "reachable": False,
+                                 "error": f"{type(e).__name__}: {str(e) or 'no message'}"}
+    else:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            for name, url in targets.items():
+                try:
+                    r = await client.get(url, headers={"User-Agent": ua})
+                    results[name] = {"status": r.status_code, "reachable": True}
+                except httpx.TimeoutException:
+                    results[name] = {"status": None, "reachable": False, "error": "Timeout >10s"}
+                except httpx.ConnectError as e:
+                    results[name] = {"status": None, "reachable": False,
+                                     "error": f"ConnectError: {type(e).__name__}"}
+                except Exception as e:
+                    results[name] = {"status": None, "reachable": False,
+                                     "error": f"{type(e).__name__}: {str(e) or 'unknown'}"}
+    return {"backend": "curl_cffi" if _USE_CURL else "httpx", "results": results}
 
 
 @app.post("/test-generate")
