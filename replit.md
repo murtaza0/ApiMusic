@@ -74,7 +74,7 @@ randomised `Accept-Language`. `curl_cffi` uses Chrome TLS fingerprints
 
 ## Vercel Deployment
 
-1. Push repo to GitHub (`https://github.com/murtaza0/Api.git`)
+1. Push repo to GitHub (`https://github.com/murtaza0/ApiMusic.git`)
 2. Import on vercel.com → auto-detects `vercel.json`
 3. No env vars required (optional: set `API_KEY` for auth)
 4. Deploy → server-side generation works (Vercel IPs not blocked)
@@ -82,9 +82,9 @@ randomised `Accept-Language`. `curl_cffi` uses Chrome TLS fingerprints
 ## GitHub Push (from Replit Shell)
 
 ```bash
-git remote set-url origin https://YOUR_TOKEN@github.com/murtaza0/Api.git
+git remote set-url origin https://YOUR_TOKEN@github.com/murtaza0/ApiMusic.git
 git add -A
-git commit -m "FastAPI rewrite"
+git commit -m "update"
 git push origin main
 ```
 
