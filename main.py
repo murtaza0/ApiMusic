@@ -248,7 +248,7 @@ async def _generate_one(req: GenerateRequest, profile: dict) -> dict:
                 json=payload,
                 headers=headers,
                 impersonate=profile.get("impersonate", "chrome131"),
-                timeout=90,
+                timeout=270,
             )
         status_code = resp.status_code
         if status_code in (401, 403):
@@ -263,10 +263,10 @@ async def _generate_one(req: GenerateRequest, profile: dict) -> dict:
             raise Exception(f"Non-JSON response (HTTP {status_code}): {resp.text[:200]}")
     else:
         try:
-            async with httpx.AsyncClient(timeout=55.0) as client:
+            async with httpx.AsyncClient(timeout=270.0) as client:
                 resp = await client.post(GENERATE_URL, json=payload, headers=headers)
         except httpx.TimeoutException:
-            raise Exception("anymusic.ai timed out (>55s) — server slow or IP blocked")
+            raise Exception("anymusic.ai timed out (>270s) — server not responding")
         except httpx.ConnectError as e:
             raise Exception(f"Cannot connect to anymusic.ai: {type(e).__name__} — IP may be blocked")
         except Exception as e:
